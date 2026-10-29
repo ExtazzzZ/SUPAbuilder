@@ -4468,6 +4468,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "Ative a resposta automática por IA para responder aos usuários com naturalidade usando os dados da sua empresa.",
+      "label": "Resposta automática por IA"
+    },
+    "connect": {
+      "description": "Responda aos usuários com naturalidade usando IA baseada nos dados da sua empresa.",
+      "embeddingHint": "O Muse não oferece modelos de embedding. A base de conhecimento e os arquivos de IA ainda precisam de uma integração com OpenAI ou Gemini.",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -4603,6 +4615,10 @@
     "deepseek": {
       "description": "Descrição da integração com o DeepSeek",
       "title": "Integração com o DeepSeek"
+    },
+    "muse": {
+      "description": "Descrição da integração com o Muse",
+      "title": "Integração com o Muse"
     }
   },
   "auth": {
@@ -5616,6 +5632,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "Compatível com OpenAI"
   },

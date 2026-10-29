@@ -2,6 +2,7 @@ import {
   SiFacebook,
   SiGoogleads,
   SiMake,
+  SiMeta,
   SiPaypal,
   SiStripe,
 } from "@icons-pack/react-simple-icons"
@@ -38,6 +39,7 @@ export const INTEGRATION_SETTINGS_REGISTRY: readonly IntegrationSettingsEntry[] 
       icon: CodeIcon,
     },
     { slug: "openai", titleKey: "openai.title", icon: BotIcon },
+    { slug: "muse", titleKey: "muse.title", icon: SiMeta },
     { slug: "gemini", titleKey: "gemini.title", icon: BotIcon },
     { slug: "claude", titleKey: "claude.title", icon: BotIcon },
     { slug: "deepseek", titleKey: "deepseek.title", icon: BotIcon },

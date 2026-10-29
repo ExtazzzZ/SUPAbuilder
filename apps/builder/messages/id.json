@@ -4489,6 +4489,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "Aktifkan balasan otomatis AI untuk menanggapi pengguna secara alami dengan AI yang didukung data bisnis Anda.",
+      "label": "Balasan Otomatis AI"
+    },
+    "connect": {
+      "description": "Tanggapi pengguna secara alami dengan AI yang didukung data bisnis Anda.",
+      "embeddingHint": "Muse tidak menyediakan model embedding. Basis Pengetahuan dan file AI tetap memerlukan integrasi OpenAI atau Gemini.",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -4624,6 +4636,10 @@
     "deepseek": {
       "description": "Deskripsi integrasi DeepSeek",
       "title": "Integrasi DeepSeek"
+    },
+    "muse": {
+      "description": "Deskripsi integrasi Muse",
+      "title": "Integrasi Muse"
     }
   },
   "auth": {
@@ -5981,6 +5997,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "Kompatibel dengan OpenAI"
   },

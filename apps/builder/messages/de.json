@@ -4489,6 +4489,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "Aktivieren Sie automatische KI-Antworten, um Benutzern auf Basis Ihrer Unternehmensdaten natürlich zu antworten.",
+      "label": "Automatische KI-Antwort"
+    },
+    "connect": {
+      "description": "Antworten Sie Benutzern auf Basis Ihrer Unternehmensdaten auf natürliche Weise mit KI.",
+      "embeddingHint": "Muse bietet keine Embedding-Modelle. Wissensdatenbank und KI-Dateien benötigen weiterhin eine OpenAI- oder Gemini-Integration.",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -4624,6 +4636,10 @@
     "deepseek": {
       "description": "Beschreibung der DeepSeek-Integration",
       "title": "DeepSeek-Integration"
+    },
+    "muse": {
+      "description": "Beschreibung der Muse-Integration",
+      "title": "Muse-Integration"
     }
   },
   "auth": {
@@ -5981,6 +5997,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "OpenAI-kompatibel"
   },

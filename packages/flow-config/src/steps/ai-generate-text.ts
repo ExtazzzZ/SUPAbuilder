@@ -15,6 +15,7 @@ export const defaultAIModels = {
   claude: "claude-sonnet-4-6",
   deepseek: "deepseek-flash",
   openrouter: "openai/gpt-5.4-mini",
+  muse: "muse-spark-1.3",
 } as const
 
 export const aiGenerateTextNativeProviderSchema = z.enum([
@@ -23,6 +24,7 @@ export const aiGenerateTextNativeProviderSchema = z.enum([
   "claude",
   "deepseek",
   "openrouter",
+  "muse",
 ])
 export type AIGenerateTextNativeProvider = z.infer<
   typeof aiGenerateTextNativeProviderSchema

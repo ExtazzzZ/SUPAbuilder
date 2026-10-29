@@ -2280,6 +2280,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "הפעילו מענה אוטומטי כדי להשיב למשתמשים באופן טבעי באמצעות AI המבוסס על הנתונים העסקיים שלכם.",
+      "label": "מענה אוטומטי באמצעות AI"
+    },
+    "connect": {
+      "description": "השיבו למשתמשים באופן טבעי באמצעות AI המבוסס על הנתונים העסקיים שלכם.",
+      "embeddingHint": "Muse אינו מספק מודלי הטמעה. מאגר הידע וקובצי ה-AI עדיין דורשים שילוב של OpenAI או Gemini.",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -2415,6 +2427,10 @@
     "deepseek": {
       "description": "תיאור שילוב DeepSeek",
       "title": "שילוב DeepSeek"
+    },
+    "muse": {
+      "description": "תיאור שילוב Muse",
+      "title": "שילוב Muse"
     }
   },
   "auth": {
@@ -3772,6 +3788,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "תואם OpenAI"
   },

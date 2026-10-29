@@ -5171,6 +5171,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "Biznes məlumatlarınıza əsaslanan AI ilə istifadəçilərə təbii şəkildə cavab vermək üçün AI avtomatik cavabını aktivləşdirin.",
+      "label": "AI avtomatik cavabı"
+    },
+    "connect": {
+      "description": "Biznes məlumatlarınıza əsaslanan AI ilə istifadəçilərə təbii şəkildə cavab verin.",
+      "embeddingHint": "Muse embedding modelləri təqdim etmir. Bilik bazası və AI faylları üçün yenə də OpenAI və ya Gemini inteqrasiyası lazımdır.",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -5306,6 +5318,10 @@
     "deepseek": {
       "description": "DeepSeek inteqrasiyasının təsviri",
       "title": "DeepSeek inteqrasiyası"
+    },
+    "muse": {
+      "description": "Muse inteqrasiyasının təsviri",
+      "title": "Muse inteqrasiyası"
     }
   },
   "auth": {
@@ -6706,6 +6722,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "OpenAI-yə uyğun"
   },

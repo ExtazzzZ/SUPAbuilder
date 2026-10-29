@@ -571,6 +571,7 @@
   "aiProviders": {
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "gemini": "Gemini",
     "openai": "OpenAI",
     "openaiCompatible": "OpenAI兼容",
@@ -1707,6 +1708,18 @@
       "label": "DeepSeek"
     },
     "title": "DeepSeek"
+  },
+  "muse": {
+    "autoReply": {
+      "description": "激活人工智能自动回复，通过您的业务数据支持的人工智能自然地回复用户。",
+      "label": "人工智能自动回复"
+    },
+    "connect": {
+      "description": "利用由您的业务数据提供支持的 AI 自然地回应用户。",
+      "embeddingHint": "Muse 不提供嵌入模型。知识库和 AI 文件仍需要接入 OpenAI 或 Gemini。",
+      "label": "Muse"
+    },
+    "title": "Muse"
   },
   "developerAccessToken": {
     "description": "产生权杖以允许您的工作区访问公共 API。请将此权杖保密，不要与任何人共享。",
@@ -6574,6 +6587,10 @@
     "deepseek": {
       "description": "DeepSeek 集成说明",
       "title": "DeepSeek集成"
+    },
+    "muse": {
+      "description": "Muse 集成说明",
+      "title": "Muse集成"
     },
     "openai": {
       "description": "OpenAI 集成说明",

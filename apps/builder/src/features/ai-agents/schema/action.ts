@@ -3,6 +3,7 @@ import {
   claudeModels,
   deepseekModels,
   geminiModels,
+  museModels,
   openaiModels,
   openrouterModels,
 } from "@chatbotx.io/ai"
@@ -99,6 +100,14 @@ export const createAIAgentRequest = z.object({
               .describe("AI provider for this model entry."),
             model: openrouterModels.describe(
               "Model id offered by the `openrouter` provider.",
+            ),
+          }),
+          z.object({
+            provider: z
+              .literal(aiProviders.enum.muse)
+              .describe("AI provider for this model entry."),
+            model: museModels.describe(
+              "Model id offered by the `muse` provider.",
             ),
           }),
         ]),

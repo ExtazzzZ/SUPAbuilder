@@ -4489,6 +4489,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "Schakel automatische AI-antwoorden in om gebruikers op natuurlijke wijze te antwoorden met AI op basis van je bedrijfsgegevens.",
+      "label": "Automatisch AI-antwoord"
+    },
+    "connect": {
+      "description": "Reageer op natuurlijke wijze op gebruikers met AI op basis van je bedrijfsgegevens.",
+      "embeddingHint": "Muse biedt geen embeddingmodellen. Kennisbank en AI-bestanden hebben nog steeds een OpenAI- of Gemini-integratie nodig.",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -4624,6 +4636,10 @@
     "deepseek": {
       "description": "Beschrijving van de DeepSeek-integratie",
       "title": "DeepSeek-integratie"
+    },
+    "muse": {
+      "description": "Beschrijving van de Muse-integratie",
+      "title": "Muse-integratie"
     }
   },
   "auth": {
@@ -5981,6 +5997,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "OpenAI-compatibel"
   },

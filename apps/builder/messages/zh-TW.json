@@ -4535,6 +4535,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "啟用人工智慧自動回覆，透過您的業務資料支援的人工智慧自然地回復使用者。",
+      "label": "人工智慧自動回覆"
+    },
+    "connect": {
+      "description": "利用由您的業務資料提供支援的 AI 自然地回應使用者。",
+      "embeddingHint": "Muse 不提供嵌入模型。知識庫與 AI 檔案仍需要串接 OpenAI 或 Gemini。",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -4670,6 +4682,10 @@
     "deepseek": {
       "description": "DeepSeek 整合說明",
       "title": "DeepSeek整合"
+    },
+    "muse": {
+      "description": "Muse 整合說明",
+      "title": "Muse整合"
     }
   },
   "auth": {
@@ -6027,6 +6043,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "開放路由器",
     "openaiCompatible": "OpenAI相容"
   },

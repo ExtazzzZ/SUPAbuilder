@@ -15,6 +15,7 @@ export const aiAnalyzeImageProvider = z.enum([
   "gemini",
   "claude",
   "openrouter",
+  "muse",
 ])
 export type AIAnalyzeImageProvider = z.infer<typeof aiAnalyzeImageProvider>
 export const aiAnalyzeImageProviderSchema = z.enum([
@@ -27,6 +28,7 @@ export const defaultAnalyzeModels = {
   gemini: "gemini-3.5-flash",
   claude: "claude-haiku-4-5-20251001",
   openrouter: "openai/gpt-5.4-mini",
+  muse: "muse-spark-1.3",
 } as const
 
 export const aiAnalyzeImageSchema = z

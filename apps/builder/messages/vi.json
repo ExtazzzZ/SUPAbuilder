@@ -311,7 +311,7 @@
     },
     "description": "Cho phép Agents của bạn truy cập PDF, Docs và nhiều hơn nữa",
     "title": "Knowledge",
-    "noEmbeddingProvider": "Chưa cấu hình nhà cung cấp embedding. Tính năng AI File yêu cầu tích hợp OpenAI hoặc Gemini. DeepSeek và Claude không hỗ trợ mô hình embedding.",
+    "noEmbeddingProvider": "Chưa cấu hình nhà cung cấp embedding. Tính năng AI File yêu cầu tích hợp OpenAI hoặc Gemini. DeepSeek, Claude và Muse không hỗ trợ mô hình embedding.",
     "testQuery": {
       "title": "Thử truy vấn",
       "description": "Chọn file, đặt câu hỏi và xem chunk nào trả lời. Chỉ mô phỏng khâu tìm kiếm, không tạo câu trả lời của AI.",
@@ -4531,6 +4531,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "Bật AI tự động trả lời để trả lời người dùng một cách tự nhiên với AI được hỗ trợ bởi dữ liệu kinh doanh của bạn.",
+      "label": "AI tự động trả lời"
+    },
+    "connect": {
+      "description": "Trả lời người dùng một cách tự nhiên với AI được hỗ trợ bởi dữ liệu kinh doanh của bạn.",
+      "embeddingHint": "Muse không có model embedding. Knowledge Base và AI file vẫn cần kết nối OpenAI hoặc Gemini.",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Thêm kết nối AI Router",
     "advanced": "Nâng cao",
@@ -4666,6 +4678,10 @@
     "deepseek": {
       "description": "Mô tả tích hợp DeepSeek",
       "title": "Tích hợp DeepSeek"
+    },
+    "muse": {
+      "description": "Mô tả tích hợp Muse",
+      "title": "Tích hợp Muse"
     }
   },
   "auth": {
@@ -6062,6 +6078,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "OpenAI Compatible"
   },

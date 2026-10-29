@@ -4468,6 +4468,18 @@
     },
     "title": "DeepSeek"
   },
+  "muse": {
+    "autoReply": {
+      "description": "AI自動返信を有効にし、ビジネスデータを活用したAIでユーザーに自然に応答します。",
+      "label": "AI自動返信"
+    },
+    "connect": {
+      "description": "ビジネスデータを活用したAIで、ユーザーに自然に応答します。",
+      "embeddingHint": "Muse には埋め込みモデルがありません。ナレッジベースと AI ファイルには引き続き OpenAI または Gemini の連携が必要です。",
+      "label": "Muse"
+    },
+    "title": "Muse"
+  },
   "decision": {
     "addConnection": "Add AI Router connection",
     "advanced": "Advanced",
@@ -4603,6 +4615,10 @@
     "deepseek": {
       "description": "DeepSeek連携の説明",
       "title": "DeepSeek連携"
+    },
+    "muse": {
+      "description": "Muse連携の説明",
+      "title": "Muse連携"
     }
   },
   "auth": {
@@ -5960,6 +5976,7 @@
     "gemini": "Gemini",
     "claude": "Claude",
     "deepseek": "DeepSeek",
+    "muse": "Muse",
     "openrouter": "OpenRouter",
     "openaiCompatible": "OpenAI互換"
   },
