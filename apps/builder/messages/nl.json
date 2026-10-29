@@ -3142,6 +3142,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Afbeelding segmenteren"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Alleen WAV-bestanden worden geaccepteerd: PCM 16-bit, mono, 16 kHz of 24 kHz, maximaal 10 minuten. Elk ander bestand (bijvoorbeeld spraakberichten) gaat naar de foutvertakking.",
+        "languageBias": {
+          "label": "Taalvoorkeur",
+          "description": "Talen waarin de audio waarschijnlijk is. Laat leeg voor automatische detectie.",
+          "placeholder": "Automatisch detecteren"
+        },
+        "keywords": {
+          "label": "Trefwoorden",
+          "description": "Namen of vaktermen waarmee Muse woorden correct spelt.",
+          "placeholder": "Voeg een trefwoord toe en druk op Enter"
+        }
+      },
+      "languages": {
+        "Arabic": "Arabisch",
+        "Bengali": "Bengaals",
+        "Dutch": "Nederlands",
+        "English": "Engels",
+        "French": "Frans",
+        "German": "Duits",
+        "Hebrew": "Hebreeuws",
+        "Hindi": "Hindi",
+        "Indonesian": "Indonesisch",
+        "Italian": "Italiaans",
+        "Japanese": "Japans",
+        "Kannada": "Kannada",
+        "Korean": "Koreaans",
+        "Malay": "Maleis",
+        "MandarinChinese": "Mandarijn-Chinees",
+        "Marathi": "Marathi",
+        "Polish": "Pools",
+        "Portuguese": "Portugees",
+        "Spanish": "Spaans",
+        "Tagalog": "Tagalog",
+        "Tamil": "Tamil",
+        "Telugu": "Telugu",
+        "Thai": "Thai",
+        "Turkish": "Turks",
+        "Vietnamese": "Vietnamees"
+      }
     }
   },
   "folders": {

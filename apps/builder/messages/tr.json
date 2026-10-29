@@ -3298,6 +3298,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Görüntüyü segmentlere ayır"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Yalnızca WAV dosyaları kabul edilir: PCM 16 bit, mono, 16 kHz veya 24 kHz, en fazla 10 dakika. Diğer dosyalar (örneğin sesli mesajlar) Hata dalına gider.",
+        "languageBias": {
+          "label": "Dil tercihi",
+          "description": "Sesin muhtemel dilleri. Otomatik algılama için boş bırakın.",
+          "placeholder": "Otomatik algıla"
+        },
+        "keywords": {
+          "label": "Anahtar kelimeler",
+          "description": "Muse'un kelimeleri doğru yazmasına yardımcı olan adlar veya alan terimleri.",
+          "placeholder": "Bir anahtar kelime ekleyip Enter'a basın"
+        }
+      },
+      "languages": {
+        "Arabic": "Arapça",
+        "Bengali": "Bengalce",
+        "Dutch": "Felemenkçe",
+        "English": "İngilizce",
+        "French": "Fransızca",
+        "German": "Almanca",
+        "Hebrew": "İbranice",
+        "Hindi": "Hintçe",
+        "Indonesian": "Endonezce",
+        "Italian": "İtalyanca",
+        "Japanese": "Japonca",
+        "Kannada": "Kannada dili",
+        "Korean": "Korece",
+        "Malay": "Malayca",
+        "MandarinChinese": "Mandarin Çincesi",
+        "Marathi": "Marathi dili",
+        "Polish": "Lehçe",
+        "Portuguese": "Portekizce",
+        "Spanish": "İspanyolca",
+        "Tagalog": "Tagalogca",
+        "Tamil": "Tamilce",
+        "Telugu": "Telugu dili",
+        "Thai": "Tayca",
+        "Turkish": "Türkçe",
+        "Vietnamese": "Vietnamca"
+      }
     }
   },
   "folders": {

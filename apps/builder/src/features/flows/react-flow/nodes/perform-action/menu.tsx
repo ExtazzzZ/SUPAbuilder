@@ -186,6 +186,10 @@ const PROVIDER_CONFIGS: ProviderConfig[] = [
         getLabel: stepWithName("flows.aiExtractData.label"),
       },
       {
+        stepType: stepTypes.enum.aiSpeechToText,
+        getLabel: stepWithAiName("fields.flows.aiSpeechToText"),
+      },
+      {
         stepType: stepTypes.enum.aiDeleteMessageHistory,
         getLabel: stepWithAiName("fields.flows.aiDeleteMessageHistory"),
       },

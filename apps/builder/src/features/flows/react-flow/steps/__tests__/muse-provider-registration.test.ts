@@ -60,4 +60,16 @@ describe("muse provider registration", () => {
     expect(modelSelect).toContain("muse: museImageModelOptions")
     expect(sizeSelect).toContain("muse: [")
   })
+
+  test("offers Speech to Text, but not Text to Speech, under Muse", () => {
+    const menu = readFileSync(
+      "src/features/flows/react-flow/nodes/perform-action/menu.tsx",
+      "utf8",
+    )
+    const start = menu.indexOf('providerKey: "muse"')
+    const museBlock = menu.slice(start, menu.indexOf("providerKey:", start + 1))
+
+    expect(museBlock).toContain("stepTypes.enum.aiSpeechToText")
+    expect(museBlock).not.toContain("stepTypes.enum.aiTextToSpeech")
+  })
 })

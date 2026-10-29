@@ -3340,6 +3340,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Tách đối tượng trong ảnh"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Chỉ nhận file WAV: PCM 16-bit, mono, 16 kHz hoặc 24 kHz, tối đa 10 phút. File khác (ví dụ tin nhắn thoại) sẽ đi nhánh Error.",
+        "languageBias": {
+          "label": "Ưu tiên ngôn ngữ",
+          "description": "Các ngôn ngữ có thể có trong audio. Để trống để tự động nhận diện.",
+          "placeholder": "Tự động nhận diện"
+        },
+        "keywords": {
+          "label": "Từ khóa",
+          "description": "Tên riêng hoặc thuật ngữ giúp Muse viết đúng chính tả.",
+          "placeholder": "Nhập từ khóa rồi nhấn Enter"
+        }
+      },
+      "languages": {
+        "Arabic": "Tiếng Ả Rập",
+        "Bengali": "Tiếng Bangla",
+        "Dutch": "Tiếng Hà Lan",
+        "English": "Tiếng Anh",
+        "French": "Tiếng Pháp",
+        "German": "Tiếng Đức",
+        "Hebrew": "Tiếng Do Thái",
+        "Hindi": "Tiếng Hindi",
+        "Indonesian": "Tiếng Indonesia",
+        "Italian": "Tiếng Italy",
+        "Japanese": "Tiếng Nhật",
+        "Kannada": "Tiếng Kannada",
+        "Korean": "Tiếng Hàn",
+        "Malay": "Tiếng Mã Lai",
+        "MandarinChinese": "Tiếng Trung Quan Thoại",
+        "Marathi": "Tiếng Marathi",
+        "Polish": "Tiếng Ba Lan",
+        "Portuguese": "Tiếng Bồ Đào Nha",
+        "Spanish": "Tiếng Tây Ban Nha",
+        "Tagalog": "Tiếng Tagalog",
+        "Tamil": "Tiếng Tamil",
+        "Telugu": "Tiếng Telugu",
+        "Thai": "Tiếng Thái",
+        "Turkish": "Tiếng Thổ Nhĩ Kỳ",
+        "Vietnamese": "Tiếng Việt"
+      }
     }
   },
   "folders": {

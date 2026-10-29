@@ -3142,6 +3142,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Segmentér billede"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Kun WAV-filer accepteres: PCM 16-bit, mono, 16 kHz eller 24 kHz, op til 10 minutter. Alle andre filer (fx talebeskeder) går til fejlgrenen.",
+        "languageBias": {
+          "label": "Sprogpræference",
+          "description": "Sprog, lyden sandsynligvis er på. Lad feltet være tomt for automatisk registrering.",
+          "placeholder": "Automatisk registrering"
+        },
+        "keywords": {
+          "label": "Nøgleord",
+          "description": "Navne eller fagtermer, der hjælper Muse med at stave ord korrekt.",
+          "placeholder": "Tilføj et nøgleord, og tryk på Enter"
+        }
+      },
+      "languages": {
+        "Arabic": "Arabisk",
+        "Bengali": "Bengali",
+        "Dutch": "Nederlandsk",
+        "English": "Engelsk",
+        "French": "Fransk",
+        "German": "Tysk",
+        "Hebrew": "Hebraisk",
+        "Hindi": "Hindi",
+        "Indonesian": "Indonesisk",
+        "Italian": "Italiensk",
+        "Japanese": "Japansk",
+        "Kannada": "Kannada",
+        "Korean": "Koreansk",
+        "Malay": "Malajisk",
+        "MandarinChinese": "Mandarin-kinesisk",
+        "Marathi": "Marathi",
+        "Polish": "Polsk",
+        "Portuguese": "Portugisisk",
+        "Spanish": "Spansk",
+        "Tagalog": "Tagalog",
+        "Tamil": "Tamil",
+        "Telugu": "Telugu",
+        "Thai": "Thai",
+        "Turkish": "Tyrkisk",
+        "Vietnamese": "Vietnamesisk"
+      }
     }
   },
   "folders": {

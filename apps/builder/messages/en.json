@@ -3980,6 +3980,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Segment Image"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Only WAV files are accepted: PCM 16-bit, mono, 16 kHz or 24 kHz, up to 10 minutes. Any other file (for example voice messages) goes to the Error branch.",
+        "languageBias": {
+          "label": "Language bias",
+          "description": "Languages the audio is likely in. Leave empty to detect automatically.",
+          "placeholder": "Auto-detect"
+        },
+        "keywords": {
+          "label": "Keywords",
+          "description": "Names or domain terms that help Muse spell words correctly.",
+          "placeholder": "Add a keyword and press Enter"
+        }
+      },
+      "languages": {
+        "Arabic": "Arabic",
+        "Bengali": "Bangla",
+        "Dutch": "Dutch",
+        "English": "English",
+        "French": "French",
+        "German": "German",
+        "Hebrew": "Hebrew",
+        "Hindi": "Hindi",
+        "Indonesian": "Indonesian",
+        "Italian": "Italian",
+        "Japanese": "Japanese",
+        "Kannada": "Kannada",
+        "Korean": "Korean",
+        "Malay": "Malay",
+        "MandarinChinese": "Mandarin Chinese",
+        "Marathi": "Marathi",
+        "Polish": "Polish",
+        "Portuguese": "Portuguese",
+        "Spanish": "Spanish",
+        "Tagalog": "Tagalog",
+        "Tamil": "Tamil",
+        "Telugu": "Telugu",
+        "Thai": "Thai",
+        "Turkish": "Turkish",
+        "Vietnamese": "Vietnamese"
+      }
     }
   },
   "folders": {

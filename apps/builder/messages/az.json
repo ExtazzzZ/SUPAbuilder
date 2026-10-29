@@ -3980,6 +3980,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Şəkli seqmentləşdir"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Yalnız WAV faylları qəbul edilir: PCM 16-bit, mono, 16 kHz və ya 24 kHz, ən çox 10 dəqiqə. Digər fayllar (məsələn, səsli mesajlar) Xəta qoluna keçir.",
+        "languageBias": {
+          "label": "Dil üstünlüyü",
+          "description": "Səsin ehtimal olunan dilləri. Avtomatik aşkarlama üçün boş saxlayın.",
+          "placeholder": "Avtomatik aşkarlama"
+        },
+        "keywords": {
+          "label": "Açar sözlər",
+          "description": "Muse-un sözləri düzgün yazmasına kömək edən adlar və ya sahə terminləri.",
+          "placeholder": "Açar söz əlavə edin və Enter basın"
+        }
+      },
+      "languages": {
+        "Arabic": "Ərəb",
+        "Bengali": "Benqal",
+        "Dutch": "Holland",
+        "English": "İngilis",
+        "French": "Fransız",
+        "German": "Alman",
+        "Hebrew": "İvrit",
+        "Hindi": "Hind",
+        "Indonesian": "İndoneziya",
+        "Italian": "İtalyan",
+        "Japanese": "Yapon",
+        "Kannada": "Kannada",
+        "Korean": "Koreya",
+        "Malay": "Malay",
+        "MandarinChinese": "Mandarin çin dili",
+        "Marathi": "Marathi",
+        "Polish": "Polyak",
+        "Portuguese": "Portuqal",
+        "Spanish": "İspan",
+        "Tagalog": "Taqaloq dili",
+        "Tamil": "Tamil",
+        "Telugu": "Teluqu",
+        "Thai": "Tay",
+        "Turkish": "Türk",
+        "Vietnamese": "Vyetnam"
+      }
     }
   },
   "folders": {

@@ -26,6 +26,7 @@ import {
 import { normalizeError } from "universal-error-normalizer"
 import { z } from "zod"
 import { env } from "../../env"
+import { getHeavyStepAttemptBudgetMs } from "../../heavy/timeouts"
 import { logger } from "../../lib/logger"
 import { saveResultToCustomField } from "../utils/contact"
 import type { HeavyStepProps } from "./flow-utils"
@@ -99,8 +100,14 @@ export function buildHeavyJobId(input: HeavyJobIdInput): string {
 export function buildHeavyOutcomeKey(input: HeavyJobIdInput): string {
   return `${OUTCOME_KEY_PREFIX}:${input.action}:${buildHeavyStepIdentityHash(input)}`
 }
-function outcomeTtlMs(): number {
-  return Math.max(env.HEAVY_JOB_WAIT_TIMEOUT_MS * 4, 10 * 60_000)
+// The key must outlive its own deadline, which a long Muse step pushes
+// past the 10-minute floor.
+function outcomeTtlMs(completionWaitTimeoutMs: number): number {
+  return Math.max(
+    env.HEAVY_JOB_WAIT_TIMEOUT_MS * 4,
+    10 * 60_000,
+    completionWaitTimeoutMs * 2,
+  )
 }
 
 async function readOutcome(key: string): Promise<OutcomeState | null> {
@@ -129,13 +136,16 @@ async function readOutcome(key: string): Promise<OutcomeState | null> {
 
 async function ensurePending(
   key: string,
-  deadlineAt: number,
+  completionWaitTimeoutMs: number,
 ): Promise<OutcomeState> {
   await getRedisConnection("hot").set(
     key,
-    JSON.stringify({ deadlineAt, status: "pending" }),
+    JSON.stringify({
+      deadlineAt: Date.now() + completionWaitTimeoutMs,
+      status: "pending",
+    }),
     "PX",
-    outcomeTtlMs(),
+    outcomeTtlMs(completionWaitTimeoutMs),
     "NX",
   )
   const outcome = await readOutcome(key)
@@ -414,12 +424,12 @@ export async function runViaHeavyWorker(
   const outcomeKey = buildHeavyOutcomeKey(identity)
   const completionWaitTimeoutMs = getHeavyJobCompletionWaitTimeoutMs(
     action,
-    env.HEAVY_JOB_WAIT_TIMEOUT_MS,
+    getHeavyStepAttemptBudgetMs(
+      action,
+      "provider" in props.step ? props.step.provider : undefined,
+    ),
   )
-  const outcome = await ensurePending(
-    outcomeKey,
-    Date.now() + completionWaitTimeoutMs,
-  )
+  const outcome = await ensurePending(outcomeKey, completionWaitTimeoutMs)
   if (outcome.status === "succeeded") {
     return { result: null, status: outcome.resultStatus ?? "success" }
   }

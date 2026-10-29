@@ -892,6 +892,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: פילוח תמונה"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "מתקבלים רק קובצי WAV: ‏PCM ‏16 ביט, מונו, 16 או 24 קילו-הרץ, עד 10 דקות. כל קובץ אחר (למשל הודעות קוליות) עובר לענף השגיאה.",
+        "languageBias": {
+          "label": "העדפת שפה",
+          "description": "השפות שבהן סביר שהשמע מוקלט. השאירו ריק לזיהוי אוטומטי.",
+          "placeholder": "זיהוי אוטומטי"
+        },
+        "keywords": {
+          "label": "מילות מפתח",
+          "description": "שמות או מונחים מקצועיים שעוזרים ל-Muse לאיית מילים נכון.",
+          "placeholder": "הוסיפו מילת מפתח והקישו Enter"
+        }
+      },
+      "languages": {
+        "Arabic": "ערבית",
+        "Bengali": "בנגלית",
+        "Dutch": "הולנדית",
+        "English": "אנגלית",
+        "French": "צרפתית",
+        "German": "גרמנית",
+        "Hebrew": "עברית",
+        "Hindi": "הינדי",
+        "Indonesian": "אינדונזית",
+        "Italian": "איטלקית",
+        "Japanese": "יפנית",
+        "Kannada": "קנאדה",
+        "Korean": "קוריאנית",
+        "Malay": "מלאית",
+        "MandarinChinese": "סינית מנדרינית",
+        "Marathi": "מראטהית",
+        "Polish": "פולנית",
+        "Portuguese": "פורטוגזית",
+        "Spanish": "ספרדית",
+        "Tagalog": "טאגאלוג",
+        "Tamil": "טמילית",
+        "Telugu": "טלוגו",
+        "Thai": "תאית",
+        "Turkish": "טורקית",
+        "Vietnamese": "וייטנאמית"
+      }
     }
   },
   "folders": {

@@ -43,6 +43,7 @@ import { segmentImageOutput } from "./handlers/segment-image"
 import { speechToTextOutput } from "./handlers/speech-to-text"
 import { textToSpeechOutput } from "./handlers/text-to-speech"
 import { waitForHeavyProviderSlot } from "./services/provider-rate-limiter"
+import { getMaxHeavyStepAttemptBudgetMs } from "./timeouts"
 
 type HeavyStepJobData = Extract<
   HeavyJobData,
@@ -185,6 +186,10 @@ async function runHeavyStep(
               customFieldId: jobData.data.step.outputFieldId,
               value: await speechToTextOutput({
                 ...props,
+                // BullMQ keeps the job id across retries, so Meta sees one
+                // session for every attempt of this step run.
+                sessionId:
+                  job.id ?? jobData.data.outcomeKey ?? jobData.data.step.id,
                 step: jobData.data.step,
               }),
             },
@@ -504,11 +509,13 @@ function startHeavyWorker() {
     },
     {
       concurrency: env.HEAVY_WORKER_CONCURRENCY,
-      // AI provider calls are allowed to run for HEAVY_JOB_WAIT_TIMEOUT_MS;
-      // keep the BullMQ lock alive for the whole budget plus a small handoff
-      // margin so a slow provider cannot be redelivered while still running.
+      // AI provider calls are allowed to run for the longest heavy-step
+      // attempt (HEAVY_JOB_WAIT_TIMEOUT_MS, or MUSE_TRANSCRIBE_TIMEOUT_MS for
+      // Muse Speech to Text); keep the BullMQ lock alive for that budget plus
+      // a small handoff margin so a slow provider cannot be redelivered while
+      // still running.
       lockDuration: Math.max(
-        env.HEAVY_JOB_WAIT_TIMEOUT_MS + 60_000,
+        getMaxHeavyStepAttemptBudgetMs() + 60_000,
         5 * 60_000,
       ),
       stalledInterval: 60_000,

@@ -3142,6 +3142,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Bild segmentieren"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Es werden nur WAV-Dateien akzeptiert: PCM 16 Bit, Mono, 16 kHz oder 24 kHz, maximal 10 Minuten. Jede andere Datei (z. B. Sprachnachrichten) geht in den Fehlerzweig.",
+        "languageBias": {
+          "label": "Sprachpräferenz",
+          "description": "Sprachen, in denen das Audio wahrscheinlich ist. Leer lassen für automatische Erkennung.",
+          "placeholder": "Automatisch erkennen"
+        },
+        "keywords": {
+          "label": "Schlüsselwörter",
+          "description": "Namen oder Fachbegriffe, mit denen Muse Wörter richtig schreibt.",
+          "placeholder": "Schlüsselwort hinzufügen und Enter drücken"
+        }
+      },
+      "languages": {
+        "Arabic": "Arabisch",
+        "Bengali": "Bengalisch",
+        "Dutch": "Niederländisch",
+        "English": "Englisch",
+        "French": "Französisch",
+        "German": "Deutsch",
+        "Hebrew": "Hebräisch",
+        "Hindi": "Hindi",
+        "Indonesian": "Indonesisch",
+        "Italian": "Italienisch",
+        "Japanese": "Japanisch",
+        "Kannada": "Kannada",
+        "Korean": "Koreanisch",
+        "Malay": "Malaiisch",
+        "MandarinChinese": "Mandarin-Chinesisch",
+        "Marathi": "Marathi",
+        "Polish": "Polnisch",
+        "Portuguese": "Portugiesisch",
+        "Spanish": "Spanisch",
+        "Tagalog": "Tagalog",
+        "Tamil": "Tamil",
+        "Telugu": "Telugu",
+        "Thai": "Thailändisch",
+        "Turkish": "Türkisch",
+        "Vietnamese": "Vietnamesisch"
+      }
     }
   },
   "folders": {

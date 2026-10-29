@@ -4311,6 +4311,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Segmentera bild"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Endast WAV-filer accepteras: PCM 16-bit, mono, 16 kHz eller 24 kHz, högst 10 minuter. Alla andra filer (till exempel röstmeddelanden) går till felgrenen.",
+        "languageBias": {
+          "label": "Språkpreferens",
+          "description": "Språk som ljudet troligen är på. Lämna tomt för automatisk identifiering.",
+          "placeholder": "Identifiera automatiskt"
+        },
+        "keywords": {
+          "label": "Nyckelord",
+          "description": "Namn eller facktermer som hjälper Muse att stava ord rätt.",
+          "placeholder": "Lägg till ett nyckelord och tryck på Enter"
+        }
+      },
+      "languages": {
+        "Arabic": "Arabiska",
+        "Bengali": "Bengali",
+        "Dutch": "Nederländska",
+        "English": "Engelska",
+        "French": "Franska",
+        "German": "Tyska",
+        "Hebrew": "Hebreiska",
+        "Hindi": "Hindi",
+        "Indonesian": "Indonesiska",
+        "Italian": "Italienska",
+        "Japanese": "Japanska",
+        "Kannada": "Kannada",
+        "Korean": "Koreanska",
+        "Malay": "Malajiska",
+        "MandarinChinese": "Mandarinkinesiska",
+        "Marathi": "Marathi",
+        "Polish": "Polska",
+        "Portuguese": "Portugisiska",
+        "Spanish": "Spanska",
+        "Tagalog": "Tagalog",
+        "Tamil": "Tamil",
+        "Telugu": "Telugu",
+        "Thai": "Thailändska",
+        "Turkish": "Turkiska",
+        "Vietnamese": "Vietnamesiska"
+      }
     }
   },
   "folders": {

@@ -28,7 +28,12 @@ vi.mock("@chatbotx.io/worker-config", async (importOriginal) => {
     integrationQueue: { add: mocks.integrationQueueAdd },
   }
 })
-vi.mock("../src/env", () => ({ env: { HEAVY_JOB_WAIT_TIMEOUT_MS: 120_000 } }))
+vi.mock("../src/env", () => ({
+  env: {
+    HEAVY_JOB_WAIT_TIMEOUT_MS: 120_000,
+    MUSE_TRANSCRIBE_TIMEOUT_MS: 540_000,
+  },
+}))
 vi.mock("../src/lib/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn() },
 }))
@@ -650,6 +655,44 @@ describe("aiSegmentImage enqueue", () => {
     expect(segmentOutcomeKey()).toBe(
       `heavy-step-outcome:aiSegmentImage:${identity}`,
     )
+  })
+
+  test("sizes the Muse speech-to-text deadline and fallback from its own timeout", async () => {
+    const props = {
+      ...makeProps(),
+      step: AISpeechToTextDefaultFn({
+        id: "22",
+        provider: "muse",
+        inputFieldId: "field-in",
+        outputFieldId: "field-out",
+      }),
+    } as never
+    const before = Date.now()
+    await runViaHeavyWorker(HeavyJobAction.aiSpeechToText, props)
+
+    // 2 attempts × 540s + 15s backoff + 60s handoff.
+    const budget = 2 * 540_000 + 15_000 + 60_000
+    const [, , options] = mocks.integrationQueueAdd.mock.calls[0] ?? []
+    expect(options.delay).toBe(budget)
+    const [, rawState, , ttl] = mocks.redis.set.mock.calls[0] ?? []
+    expect(JSON.parse(rawState).deadlineAt).toBeGreaterThanOrEqual(
+      before + budget,
+    )
+    expect(ttl).toBeGreaterThan(budget)
+  })
+
+  test("keeps the OpenAI speech-to-text deadline on the shared budget", async () => {
+    await runViaHeavyWorker(HeavyJobAction.aiSpeechToText, {
+      ...makeProps(),
+      step: AISpeechToTextDefaultFn({
+        id: "22",
+        inputFieldId: "field-in",
+        outputFieldId: "field-out",
+      }),
+    } as never)
+
+    const [, , options] = mocks.integrationQueueAdd.mock.calls[0] ?? []
+    expect(options.delay).toBe(2 * 120_000 + 15_000 + 60_000)
   })
 
   test("gives each execution of the same step its own identity", () => {

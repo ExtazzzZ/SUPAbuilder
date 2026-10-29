@@ -3142,6 +3142,48 @@
     },
     "aiSegmentImage": {
       "label": "{name}: Segmenta immagine"
+    },
+    "aiSpeechToText": {
+      "muse": {
+        "formatHint": "Sono accettati solo file WAV: PCM a 16 bit, mono, 16 kHz o 24 kHz, fino a 10 minuti. Qualsiasi altro file (ad esempio i messaggi vocali) va al ramo di errore.",
+        "languageBias": {
+          "label": "Preferenza lingua",
+          "description": "Lingue probabili dell'audio. Lascia vuoto per il rilevamento automatico.",
+          "placeholder": "Rilevamento automatico"
+        },
+        "keywords": {
+          "label": "Parole chiave",
+          "description": "Nomi o termini di settore che aiutano Muse a scrivere correttamente le parole.",
+          "placeholder": "Aggiungi una parola chiave e premi Invio"
+        }
+      },
+      "languages": {
+        "Arabic": "Arabo",
+        "Bengali": "Bengalese",
+        "Dutch": "Olandese",
+        "English": "Inglese",
+        "French": "Francese",
+        "German": "Tedesco",
+        "Hebrew": "Ebraico",
+        "Hindi": "Hindi",
+        "Indonesian": "Indonesiano",
+        "Italian": "Italiano",
+        "Japanese": "Giapponese",
+        "Kannada": "Kannada",
+        "Korean": "Coreano",
+        "Malay": "Malese",
+        "MandarinChinese": "Cinese mandarino",
+        "Marathi": "Marathi",
+        "Polish": "Polacco",
+        "Portuguese": "Portoghese",
+        "Spanish": "Spagnolo",
+        "Tagalog": "Tagalog",
+        "Tamil": "Tamil",
+        "Telugu": "Telugu",
+        "Thai": "Thailandese",
+        "Turkish": "Turco",
+        "Vietnamese": "Vietnamita"
+      }
     }
   },
   "folders": {

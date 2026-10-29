@@ -1,3 +1,4 @@
+import type { MUSE_TRANSCRIPTION_MODEL } from "@chatbotx.io/flow-config"
 import { z } from "zod"
 
 export const museModels = z.enum([
@@ -46,3 +47,5 @@ export const museImageModelOptions: { label: string; value: MuseImageModel }[] =
       value: museImageModels.enum["muse-image-1.0"],
     },
   ]
+
+export type MuseTranscriptionModel = typeof MUSE_TRANSCRIPTION_MODEL

@@ -108,6 +108,7 @@ vi.mock("../src/env", () => ({
   env: {
     HEAVY_JOB_WAIT_TIMEOUT_MS: 120_000,
     HEAVY_PROVIDER_MIN_INTERVAL_MS: 250,
+    MUSE_TRANSCRIBE_TIMEOUT_MS: 540_000,
     HEAVY_WORKER_CONCURRENCY: 1,
   },
 }))
@@ -233,8 +234,9 @@ describe("heavy worker", () => {
     expect(mocks.workerOptions?.concurrency).toBe(1)
   })
 
-  test("keeps a short renewable BullMQ lock so a dead process is retried within a minute", () => {
-    expect(mocks.workerOptions?.lockDuration).toBe(300_000)
+  test("sizes the BullMQ lock to the longest heavy-step attempt", () => {
+    // MUSE_TRANSCRIBE_TIMEOUT_MS (9 min) + 60s handoff.
+    expect(mocks.workerOptions?.lockDuration).toBe(600_000)
     expect(mocks.workerOptions?.stalledInterval).toBe(60_000)
     expect(mocks.workerOptions?.maxStalledCount).toBe(1)
   })
@@ -801,6 +803,26 @@ describe("heavy worker", () => {
         },
       ],
     })
+  })
+
+  test("passes the stable heavy job id to Muse speech-to-text as its session", async () => {
+    mocks.speechToTextOutput.mockResolvedValue("xin chao")
+    const job = buildGenerateImageJob()
+    job.data.type = "aiSpeechToText"
+    job.data.data.step = {
+      id: "1",
+      stepType: "aiSpeechToText",
+      provider: "muse",
+      model: "muse-voice-transcribe-1.0",
+      inputFieldId: "custom-field-in",
+      outputFieldId: "custom-field-1",
+    } as unknown as typeof job.data.data.step
+
+    await mocks.processJob?.({ ...job, attemptsMade: 1 })
+
+    expect(mocks.speechToTextOutput).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "job-1" }),
+    )
   })
 
   test("returns error data for expected media failures", async () => {
