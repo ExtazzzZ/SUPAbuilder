@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   markProcessingRunFailed: vi.fn(),
   recordHeavyAIStepProviderError: vi.fn(),
   loggerError: vi.fn(),
+  segmentImageOutput: vi.fn(),
   speechToTextOutput: vi.fn(),
   shouldRunHeavyStep: vi.fn(),
   textToSpeechOutput: vi.fn(),
@@ -150,6 +151,9 @@ vi.mock("../src/heavy/handlers/provider-error", () => ({
 vi.mock("../src/heavy/handlers/process-ai-file", () => ({
   processAIFile: mocks.processAIFile,
 }))
+vi.mock("../src/heavy/handlers/segment-image", () => ({
+  segmentImageOutput: mocks.segmentImageOutput,
+}))
 vi.mock("../src/heavy/handlers/speech-to-text", () => ({
   speechToTextOutput: mocks.speechToTextOutput,
 }))
@@ -160,6 +164,10 @@ vi.mock("../src/heavy/services/provider-rate-limiter", () => ({
   waitForHeavyProviderSlot: mocks.waitForHeavyProviderSlot,
 }))
 vi.mock("../src/integration/handlers/heavy-step-runner", () => ({
+  buildHeavyStepIdentityHash: (input: {
+    parentJobId: string
+    stepId: string
+  }) => `hash-${input.parentJobId}-${input.stepId}`,
   completeHeavyStep: mocks.completeHeavyStep,
   failHeavyStep: mocks.failHeavyStep,
   shouldRunHeavyStep: mocks.shouldRunHeavyStep,
@@ -386,7 +394,12 @@ describe("heavy worker", () => {
     )
     expect(result).toEqual({
       status: "success",
-      outputValue: "https://cdn.example.com/a.png",
+      outputValues: [
+        {
+          customFieldId: "custom-field-1",
+          value: "https://cdn.example.com/a.png",
+        },
+      ],
     })
   })
 
@@ -407,9 +420,13 @@ describe("heavy worker", () => {
       contactId: "contact-1",
       contactInboxId: "contact-inbox-1",
       outcomeKey: "heavy-step-outcome-1",
-      outputFieldId: "custom-field-1",
       result: {
-        outputValue: "https://cdn.example.com/a.png",
+        outputValues: [
+          {
+            customFieldId: "custom-field-1",
+            value: "https://cdn.example.com/a.png",
+          },
+        ],
         status: "success",
       },
       workspaceId: "workspace-1",
@@ -457,6 +474,333 @@ describe("heavy worker", () => {
       },
       expect.anything(),
     )
+  })
+
+  describe("aiSegmentImage", () => {
+    function buildSegmentImageJob() {
+      return {
+        id: "heavy-aiSegmentImage-abc",
+        data: {
+          type: "aiSegmentImage",
+          data: {
+            conversationId: "conversation-1",
+            contactInboxId: "contact-inbox-1",
+            outcomeKey: "heavy-step-outcome-1",
+            continuation: {
+              flowExecutionKey: "flow-execution-1",
+              flowId: "flow-1",
+              nodeId: "node-1",
+            },
+            step: {
+              id: "7",
+              stepType: "aiSegmentImage",
+              inputFieldId: "field-in",
+              target: "product box",
+              matchSelection: "largest",
+              outputFormat: "cutout",
+              outputFieldId: "field-out",
+              detailsOutputFieldId: "field-details",
+              states: [
+                { id: "11", stateType: "success" },
+                { id: "12", stateType: "skip" },
+                { id: "13", stateType: "error" },
+              ],
+            },
+          },
+        },
+      }
+    }
+
+    test("dispatches to the segment handler with the per-run identity and Muse slot", async () => {
+      const outputValues = [
+        { customFieldId: "field-out", value: "https://cdn/x.png" },
+        { customFieldId: "field-details", value: '{"count":1}' },
+      ]
+      mocks.segmentImageOutput.mockResolvedValue({
+        status: "success",
+        outputValues,
+      })
+
+      await mocks.processJob?.(buildSegmentImageJob())
+
+      expect(mocks.waitForHeavyProviderSlot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "muse",
+          workspaceId: "workspace-1",
+        }),
+      )
+      expect(mocks.segmentImageOutput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identityHash: "hash-flow-execution-1-7",
+          jobId: "heavy-aiSegmentImage-abc",
+          step: expect.objectContaining({ stepType: "aiSegmentImage" }),
+        }),
+      )
+      expect(mocks.completeHeavyStep).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcomeKey: "heavy-step-outcome-1",
+          result: { status: "success", outputValues },
+        }),
+      )
+      expect(mocks.integrationQueueAdd).toHaveBeenCalledOnce()
+    })
+
+    test("persists a no-match skip and resumes the flow", async () => {
+      mocks.segmentImageOutput.mockResolvedValue({ status: "skip" })
+
+      await mocks.processJob?.(buildSegmentImageJob())
+
+      expect(mocks.completeHeavyStep).toHaveBeenCalledWith(
+        expect.objectContaining({ result: { status: "skip" } }),
+      )
+      expect(mocks.integrationQueueAdd).toHaveBeenCalledWith(
+        "resumeHeavyStep",
+        expect.objectContaining({
+          data: expect.objectContaining({ startFromStepId: "7" }),
+        }),
+        expect.anything(),
+      )
+    })
+
+    test("attributes provider errors to Muse", async () => {
+      const error = new ExpectedHeavyStepError("Muse integration not found")
+      mocks.segmentImageOutput.mockRejectedValueOnce(error)
+
+      await expect(mocks.processJob?.(buildSegmentImageJob())).resolves.toEqual(
+        { status: "error", errorMessage: "Muse integration not found" },
+      )
+      expect(mocks.recordHeavyAIStepProviderError).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "muse", error }),
+      )
+    })
+
+    test("falls back to the job id for the storage identity without a continuation", async () => {
+      mocks.segmentImageOutput.mockResolvedValue({ status: "skip" })
+      const job = buildSegmentImageJob()
+      const {
+        continuation: _continuation,
+        outcomeKey: _outcomeKey,
+        ...data
+      } = job.data.data
+      job.data.data = data as typeof job.data.data
+
+      await mocks.processJob?.(job)
+
+      expect(mocks.segmentImageOutput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identityHash: "hash-heavy-aiSegmentImage-abc-7",
+        }),
+      )
+      // Not flow-owned: nothing to persist or resume.
+      expect(mocks.completeHeavyStep).not.toHaveBeenCalled()
+      expect(mocks.integrationQueueAdd).not.toHaveBeenCalled()
+    })
+
+    test("does not call SAM again once the step reached a terminal outcome", async () => {
+      mocks.shouldRunHeavyStep.mockResolvedValueOnce(false)
+
+      await mocks.processJob?.(buildSegmentImageJob())
+
+      expect(mocks.shouldRunHeavyStep).toHaveBeenCalledWith(
+        "heavy-step-outcome-1",
+      )
+      expect(mocks.segmentImageOutput).not.toHaveBeenCalled()
+      expect(mocks.completeHeavyStep).not.toHaveBeenCalled()
+      expect(mocks.integrationQueueAdd).not.toHaveBeenCalled()
+    })
+
+    test("does nothing for a blocked workspace owner", async () => {
+      mocks.isBlockedWorkspace.mockResolvedValueOnce(true)
+
+      await expect(
+        mocks.processJob?.(buildSegmentImageJob()),
+      ).resolves.toBeUndefined()
+      expect(mocks.segmentImageOutput).not.toHaveBeenCalled()
+      expect(mocks.integrationQueueAdd).not.toHaveBeenCalled()
+    })
+
+    test("rethrows a retryable Meta failure so BullMQ retries it", async () => {
+      const error = Object.assign(
+        new Error("SAM request failed with status 429"),
+        {
+          retryable: true,
+          status: 429,
+        },
+      )
+      mocks.segmentImageOutput.mockRejectedValueOnce(error)
+
+      await expect(mocks.processJob?.(buildSegmentImageJob())).rejects.toBe(
+        error,
+      )
+      expect(mocks.completeHeavyStep).not.toHaveBeenCalled()
+      expect(mocks.recordHeavyAIStepProviderError).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "muse" }),
+      )
+    })
+
+    test("routes a non-retryable Meta failure to the error branch at once", async () => {
+      mocks.segmentImageOutput.mockRejectedValueOnce(
+        Object.assign(new Error("SAM stream failed: refused"), {
+          retryable: false,
+        }),
+      )
+
+      await mocks.processJob?.(buildSegmentImageJob())
+
+      expect(mocks.completeHeavyStep).toHaveBeenCalledWith(
+        expect.objectContaining({
+          result: {
+            status: "error",
+            errorMessage: "SAM stream failed: refused",
+          },
+        }),
+      )
+      expect(mocks.integrationQueueAdd).toHaveBeenCalledOnce()
+    })
+
+    test("fails and resumes the flow after the last retry is exhausted", async () => {
+      const job = buildSegmentImageJob()
+
+      await mocks.workerFailedHandler?.(
+        {
+          ...job,
+          name: "aiSegmentImage",
+          attemptsMade: 2,
+          opts: { attempts: 2 },
+        },
+        new Error("Meta 503"),
+      )
+
+      expect(mocks.failHeavyStep).toHaveBeenCalledWith(
+        "heavy-step-outcome-1",
+        expect.objectContaining({ message: "Meta 503" }),
+      )
+      expect(mocks.integrationQueueAdd).toHaveBeenCalledWith(
+        "resumeHeavyStep",
+        expect.objectContaining({
+          data: expect.objectContaining({ startFromStepId: "7" }),
+        }),
+        { jobId: "heavy-resume-heavy-aiSegmentImage-abc" },
+      )
+    })
+
+    test("leaves the outcome pending while a retry is still due", async () => {
+      const job = buildSegmentImageJob()
+
+      await mocks.workerFailedHandler?.(
+        {
+          ...job,
+          name: "aiSegmentImage",
+          attemptsMade: 1,
+          opts: { attempts: 2 },
+        },
+        new Error("Meta 503"),
+      )
+
+      expect(mocks.failHeavyStep).not.toHaveBeenCalled()
+      expect(mocks.integrationQueueAdd).not.toHaveBeenCalled()
+    })
+
+    test("ignores an invalid result for a job that is not flow-owned", async () => {
+      mocks.segmentImageOutput.mockResolvedValue({ status: "done" })
+      const job = buildSegmentImageJob()
+      const { continuation: _continuation, ...data } = job.data.data
+      job.data.data = data as typeof job.data.data
+
+      await mocks.processJob?.(job)
+
+      expect(mocks.failHeavyStep).not.toHaveBeenCalled()
+      expect(mocks.integrationQueueAdd).not.toHaveBeenCalled()
+    })
+
+    test("fails and resumes immediately when the handler returns an invalid result", async () => {
+      mocks.segmentImageOutput.mockResolvedValue({
+        status: "success",
+        outputValue: "https://cdn/x.png",
+      })
+
+      await mocks.processJob?.(buildSegmentImageJob())
+
+      expect(mocks.completeHeavyStep).not.toHaveBeenCalled()
+      expect(mocks.failHeavyStep).toHaveBeenCalledWith(
+        "heavy-step-outcome-1",
+        expect.anything(),
+      )
+      expect(mocks.integrationQueueAdd).toHaveBeenCalledWith(
+        "resumeHeavyStep",
+        expect.objectContaining({
+          data: expect.objectContaining({ outcomeKey: "heavy-step-outcome-1" }),
+        }),
+        expect.anything(),
+      )
+      expect(mocks.loggerError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "aiSegmentImage",
+          conversationId: "conversation-1",
+          err: expect.anything(),
+          jobId: "heavy-aiSegmentImage-abc",
+          workspaceId: "workspace-1",
+        }),
+        "Heavy step returned an invalid result",
+      )
+    })
+  })
+
+  test.each([
+    [
+      "aiEditImage",
+      mocks.editImageOutput,
+      {
+        provider: "openai",
+        model: "gpt-image-2",
+        inputFieldId: "custom-field-in",
+        prompt: "brighter",
+        size: "1024x1024",
+        quality: "low",
+      },
+    ],
+    [
+      "aiSpeechToText",
+      mocks.speechToTextOutput,
+      {
+        provider: "openai",
+        model: "whisper-1",
+        inputFieldId: "custom-field-in",
+      },
+    ],
+    [
+      "aiTextToSpeech",
+      mocks.textToSpeechOutput,
+      {
+        provider: "openai",
+        model: "tts-1",
+        voiceType: "alloy",
+        message: "Xin chao",
+      },
+    ],
+  ])("maps the %s output to its outputFieldId", async (type, handler, stepFields) => {
+    handler.mockResolvedValue("https://cdn.example.com/out")
+    const job = buildGenerateImageJob()
+    job.data.type = type
+    job.data.data.step = {
+      id: "1",
+      stepType: type,
+      outputFieldId: "custom-field-1",
+      ...stepFields,
+    } as typeof job.data.data.step
+
+    const result = await mocks.processJob?.(job)
+
+    expect(handler).toHaveBeenCalledOnce()
+    expect(result).toEqual({
+      status: "success",
+      outputValues: [
+        {
+          customFieldId: "custom-field-1",
+          value: "https://cdn.example.com/out",
+        },
+      ],
+    })
   })
 
   test("returns error data for expected media failures", async () => {

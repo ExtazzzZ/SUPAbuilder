@@ -2,6 +2,7 @@ import { aiAgentModelConfig } from "@chatbotx.io/database/partials"
 import {
   aiEditImageSchema,
   aiGenerateImageSchema,
+  aiSegmentImageSchema,
   aiSpeechToTextSchema,
   aiTextToSpeechSchema,
   type FlowActionTargetType,
@@ -40,6 +41,7 @@ export type HeavyFlowContinuation = {
 export const HeavyJobAction = {
   processAIFile: "processAIFile",
   aiEditImage: "aiEditImage",
+  aiSegmentImage: "aiSegmentImage",
   aiGenerateImage: "aiGenerateImage",
   aiSpeechToText: "aiSpeechToText",
   aiTextToSpeech: "aiTextToSpeech",
@@ -59,6 +61,12 @@ const heavyJobOptionsByAction: Record<HeavyJobAction, JobsOptions> = {
     removeOnFail: { count: 1000 },
   },
   [HeavyJobAction.aiEditImage]: {
+    attempts: 2,
+    backoff: { type: "exponential", delay: 30_000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 500 },
+  },
+  [HeavyJobAction.aiSegmentImage]: {
     attempts: 2,
     backoff: { type: "exponential", delay: 30_000 },
     removeOnComplete: { count: 200 },
@@ -242,6 +250,13 @@ const heavyJobAiEditImageSchema = z.object({
   }),
 })
 
+const heavyJobAiSegmentImageSchema = z.object({
+  type: z.literal(HeavyJobAction.aiSegmentImage),
+  data: heavyStepBaseDataSchema.extend({
+    step: aiSegmentImageSchema,
+  }),
+})
+
 const heavyJobAiGenerateImageSchema = z.object({
   type: z.literal(HeavyJobAction.aiGenerateImage),
   data: heavyStepBaseDataSchema.extend({
@@ -310,6 +325,7 @@ const heavyJobOptimizeStoredImageSchema = z.object({
 export const heavyJobDataSchema = z.discriminatedUnion("type", [
   heavyJobProcessAIFileSchema,
   heavyJobAiEditImageSchema,
+  heavyJobAiSegmentImageSchema,
   heavyJobAiGenerateImageSchema,
   heavyJobAiSpeechToTextSchema,
   heavyJobAiTextToSpeechSchema,
@@ -318,10 +334,20 @@ export const heavyJobDataSchema = z.discriminatedUnion("type", [
   heavyJobOptimizeStoredImageSchema,
 ])
 
+const heavyStepOutputValueSchema = z.object({
+  customFieldId: z.string().min(1),
+  value: z.string().min(1),
+})
+
 export const heavyStepResultSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("success"),
-    outputValue: z.string().min(1),
+    outputValues: z.array(heavyStepOutputValueSchema).min(1),
+  }),
+  // A completed run that found nothing to write; the flow routes to its skip
+  // state and no custom field is touched.
+  z.object({
+    status: z.literal("skip"),
   }),
   z.object({
     status: z.literal("error"),
@@ -341,6 +367,9 @@ export const heavyAnalyzeImageResultSchema = z.object({
 export type HeavyJobData = z.infer<typeof heavyJobDataSchema>
 export type HeavyJobProcessAIFile = z.infer<typeof heavyJobProcessAIFileSchema>
 export type HeavyJobAiEditImage = z.infer<typeof heavyJobAiEditImageSchema>
+export type HeavyJobAiSegmentImage = z.infer<
+  typeof heavyJobAiSegmentImageSchema
+>
 export type HeavyJobAiGenerateImage = z.infer<
   typeof heavyJobAiGenerateImageSchema
 >
@@ -358,6 +387,7 @@ export type HeavyJobOptimizeStoredImage = z.infer<
   typeof heavyJobOptimizeStoredImageSchema
 >
 export type StoredImageOptimization = HeavyJobOptimizeStoredImage["data"]
+export type HeavyStepOutputValue = z.infer<typeof heavyStepOutputValueSchema>
 export type HeavyStepResultData = z.infer<typeof heavyStepResultSchema>
 export type HeavyExtractTextFromFileResultData = z.infer<
   typeof heavyExtractTextFromFileResultSchema

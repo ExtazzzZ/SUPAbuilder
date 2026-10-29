@@ -2015,6 +2015,9 @@ importers:
       '@chatbotx.io/worker-config':
         specifier: workspace:*
         version: link:../worker-config
+      '@meta-sam/parser':
+        specifier: 0.1.0
+        version: 0.1.0
       '@openrouter/ai-sdk-provider':
         specifier: ^3.1.0
         version: 3.1.0(ai@7.0.143(zod@4.6.5))(zod@4.6.5)
@@ -2024,6 +2027,9 @@ importers:
       ai:
         specifier: ^7.0.143
         version: 7.0.143(zod@4.6.5)
+      eventsource-parser:
+        specifier: ^3.1.1
+        version: 3.1.1
       ky:
         specifier: ^2.0.2
         version: 2.0.2
@@ -5221,6 +5227,10 @@ packages:
 
   '@marijn/find-cluster-break@1.0.2':
     resolution: {integrity: sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g==}
+
+  '@meta-sam/parser@0.1.0':
+    resolution: {integrity: sha512-099xq4EhULxm7gV+kEllQ9WTaNgwYumGRvCX5WAT2bny/SEh+U9tVT9bAzN1mISOC7TO6mgOt3MJmZ2Mv2RTmw==}
+    engines: {node: ^20.17.0 || >=22.9.0}
 
   '@modelcontextprotocol/sdk@1.32.0':
     resolution: {integrity: sha512-8BviX/hK4Gd2eL1KdTwm0gfl4d3wdoErW0Jd00h6nomUAtk6IJk5vwQJc6kfWtJTzN5OEV/lgIiJKI8fiDGAlA==}
@@ -13054,6 +13064,8 @@ snapshots:
       - vue
 
   '@marijn/find-cluster-break@1.0.2': {}
+
+  '@meta-sam/parser@0.1.0': {}
 
   '@modelcontextprotocol/sdk@1.32.0(zod@4.6.5)':
     dependencies:

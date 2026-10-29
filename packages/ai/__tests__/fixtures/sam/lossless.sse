@@ -1,0 +1,18 @@
+event: response.created
+data: {"type":"response.created"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg-lossless","output_index":0,"content_index":0,"delta":"<0f>0<|box;x1=513;y1=371;x2=523;y2=381;w=1440;h=900|><|mask;x=0;y=0;data=11,11,~!!!"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg-lossless","output_index":0,"content_index":0,"delta":"!r!kCq#$.pF[_cZIw.?wO3R8-&NJofiCI$_J0aA.1VC*YyK_'z*(LEG8!+H9"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg-lossless","output_index":0,"content_index":0,"delta":"evY.82Z-4.@C[.9C@T86o$3E=-&8w3W=]xS.|>\n"}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","item_id":"msg-lossless","output_index":0,"content_index":0,"part":{"type":"output_text","text":"<0f>0<|box;x1=513;y1=371;x2=523;y2=381;w=1440;h=900|><|mask;x=0;y=0;data=11,11,~!!!!r!kCq#$.pF[_cZIw.?wO3R8-&NJofiCI$_J0aA.1VC*YyK_'z*(LEG8!+H9evY.82Z-4.@C[.9C@T86o$3E=-&8w3W=]xS.|>\n"}}
+
+event: response.completed
+data: {"type":"response.completed"}
+

@@ -2,10 +2,12 @@ import { createHash } from "node:crypto"
 import {
   type AIEditImageSchema,
   type AIGenerateImageSchema,
+  type AISegmentImageSchema,
   type AISpeechToTextSchema,
   type AITextToSpeechSchema,
   aiEditImageSchema,
   aiGenerateImageSchema,
+  aiSegmentImageSchema,
   aiSpeechToTextSchema,
   aiTextToSpeechSchema,
 } from "@chatbotx.io/flow-config"
@@ -31,8 +33,18 @@ import type { ExecuteStepResult } from "./step"
 
 type HeavyStepRunnerAction = Extract<
   HeavyJobAction,
-  "aiEditImage" | "aiGenerateImage" | "aiSpeechToText" | "aiTextToSpeech"
+  | "aiEditImage"
+  | "aiGenerateImage"
+  | "aiSegmentImage"
+  | "aiSpeechToText"
+  | "aiTextToSpeech"
 >
+type HeavyStepRunnerStep =
+  | AIEditImageSchema
+  | AIGenerateImageSchema
+  | AISegmentImageSchema
+  | AISpeechToTextSchema
+  | AITextToSpeechSchema
 type HeavyStepJobData = Extract<HeavyJobData, { type: HeavyStepRunnerAction }>
 type HeavyJobIdInput = {
   action: HeavyStepRunnerAction
@@ -48,6 +60,9 @@ const outcomeStateSchema = z.object({
   resumeLeaseToken: z.string().optional(),
   resumeLeaseUntil: z.number().optional(),
   resumeStatus: z.enum(["resuming", "resumed"]).optional(),
+  // Which branch a succeeded step routes to. Records written before skip
+  // existed have no value and mean success.
+  resultStatus: z.enum(["success", "skip"]).optional(),
   status: z.enum(["pending", "writing", "succeeded", "failed"]),
   writingStartedAt: z.number().optional(),
 })
@@ -71,11 +86,18 @@ function stableJson(input: HeavyJobIdInput): string {
 function hash(input: string): string {
   return createHash("sha256").update(input).digest("hex").slice(0, 32)
 }
+/**
+ * The per-run identity shared by the job id and outcome key. Stable across
+ * retries of one step execution, different for every later execution.
+ */
+export function buildHeavyStepIdentityHash(input: HeavyJobIdInput): string {
+  return hash(stableJson(input))
+}
 export function buildHeavyJobId(input: HeavyJobIdInput): string {
-  return `heavy-${input.action}-${hash(stableJson(input))}`
+  return `heavy-${input.action}-${buildHeavyStepIdentityHash(input)}`
 }
 export function buildHeavyOutcomeKey(input: HeavyJobIdInput): string {
-  return `${OUTCOME_KEY_PREFIX}:${input.action}:${hash(stableJson(input))}`
+  return `${OUTCOME_KEY_PREFIX}:${input.action}:${buildHeavyStepIdentityHash(input)}`
 }
 function outcomeTtlMs(): number {
   return Math.max(env.HEAVY_JOB_WAIT_TIMEOUT_MS * 4, 10 * 60_000)
@@ -126,7 +148,10 @@ async function ensurePending(
 async function transitionOutcome(
   key: string,
   status: "writing" | "succeeded" | "failed",
-  errorMessage?: string,
+  options: {
+    errorMessage?: string
+    resultStatus?: "success" | "skip"
+  } = {},
 ): Promise<string> {
   return String(
     await getRedisConnection("hot").eval(
@@ -150,11 +175,13 @@ if nextStatus == "writing" then
     redis.call("SET", KEYS[1], cjson.encode(obj), "KEEPTTL")
     return "writing"
   end
+  if obj["status"] == "writing" then return "busy" end
   return obj["status"]
 end
 obj["status"] = nextStatus
 obj["writingStartedAt"] = nil
 if nextStatus == "failed" then obj["errorMessage"] = ARGV[3] end
+if nextStatus == "succeeded" then obj["resultStatus"] = ARGV[5] end
 redis.call("SET", KEYS[1], cjson.encode(obj), "KEEPTTL")
 return nextStatus
 `,
@@ -162,8 +189,9 @@ return nextStatus
       key,
       Date.now().toString(),
       status,
-      errorMessage ?? "Heavy step failed",
+      options.errorMessage ?? "Heavy step failed",
       STALE_WRITE_MS.toString(),
+      options.resultStatus ?? "success",
     ),
   )
 }
@@ -229,48 +257,70 @@ redis.call("SET", KEYS[1], cjson.encode(obj), "KEEPTTL")
   )
 }
 
+/**
+ * A stale `writing` outcome means a previous attempt died between claiming
+ * the write and finishing it (e.g. the second field write threw). The retry
+ * must run again, or the flow only resumes at the fallback deadline with a
+ * half-written contact. Same staleness rule as `transitionOutcome`.
+ */
 export async function shouldRunHeavyStep(outcomeKey: string): Promise<boolean> {
   const outcome = await readOutcome(outcomeKey)
-  return outcome?.status === "pending"
+  if (outcome?.status === "pending") {
+    return true
+  }
+  return (
+    outcome?.status === "writing" &&
+    (outcome.writingStartedAt === undefined ||
+      Date.now() - outcome.writingStartedAt > STALE_WRITE_MS)
+  )
 }
 
 export async function completeHeavyStep(input: {
   contactId: string
   contactInboxId: string
   outcomeKey: string
-  outputFieldId?: string
   result: HeavyStepResultData
   workspaceId: string
 }): Promise<void> {
   if (input.result.status === "error") {
-    await transitionOutcome(
-      input.outcomeKey,
-      "failed",
-      input.result.errorMessage,
-    )
+    await transitionOutcome(input.outcomeKey, "failed", {
+      errorMessage: input.result.errorMessage,
+    })
     return
   }
-  if (input.outputFieldId) {
-    const claim = await transitionOutcome(input.outcomeKey, "writing")
-    if (claim !== "writing") {
-      return
-    }
+  if (input.result.status === "skip") {
+    await transitionOutcome(input.outcomeKey, "succeeded", {
+      resultStatus: "skip",
+    })
+    return
+  }
+  const claim = await transitionOutcome(input.outcomeKey, "writing")
+  if (claim !== "writing") {
+    return
+  }
+  // Values are deterministic per run, so a retry after a partial write
+  // rewrites the same values.
+  for (const output of input.result.outputValues) {
     await saveResultToCustomField({
       contactId: input.contactId,
       contactInboxId: input.contactInboxId,
-      customFieldId: input.outputFieldId,
-      fullText: input.result.outputValue,
+      customFieldId: output.customFieldId,
+      fullText: output.value,
       workspaceId: input.workspaceId,
     })
   }
-  await transitionOutcome(input.outcomeKey, "succeeded")
+  await transitionOutcome(input.outcomeKey, "succeeded", {
+    resultStatus: "success",
+  })
 }
 
 export async function failHeavyStep(
   outcomeKey: string,
   error: unknown,
 ): Promise<void> {
-  await transitionOutcome(outcomeKey, "failed", normalizeError(error).message)
+  await transitionOutcome(outcomeKey, "failed", {
+    errorMessage: normalizeError(error).message,
+  })
 }
 
 function buildContinuation<T>(props: HeavyStepProps<T>) {
@@ -300,12 +350,7 @@ function buildContinuation<T>(props: HeavyStepProps<T>) {
 
 function buildHeavyStepJobData(
   action: HeavyStepRunnerAction,
-  props: HeavyStepProps<
-    | AIEditImageSchema
-    | AIGenerateImageSchema
-    | AISpeechToTextSchema
-    | AITextToSpeechSchema
-  >,
+  props: HeavyStepProps<HeavyStepRunnerStep>,
   outcomeKey: string,
 ): HeavyStepJobData {
   const baseData = {
@@ -326,6 +371,11 @@ function buildHeavyStepJobData(
         return {
           type: action,
           data: { ...baseData, step: aiGenerateImageSchema.parse(props.step) },
+        }
+      case HeavyJobAction.aiSegmentImage:
+        return {
+          type: action,
+          data: { ...baseData, step: aiSegmentImageSchema.parse(props.step) },
         }
       case HeavyJobAction.aiSpeechToText:
         return {
@@ -352,12 +402,7 @@ function buildHeavyStepJobData(
 
 export async function runViaHeavyWorker(
   action: HeavyStepRunnerAction,
-  props: HeavyStepProps<
-    | AIEditImageSchema
-    | AIGenerateImageSchema
-    | AISpeechToTextSchema
-    | AITextToSpeechSchema
-  >,
+  props: HeavyStepProps<HeavyStepRunnerStep>,
 ): Promise<ExecuteStepResult> {
   const identity = {
     action,
@@ -376,7 +421,7 @@ export async function runViaHeavyWorker(
     Date.now() + completionWaitTimeoutMs,
   )
   if (outcome.status === "succeeded") {
-    return { result: null, status: "success" }
+    return { result: null, status: outcome.resultStatus ?? "success" }
   }
   if (outcome.status === "failed") {
     return {
@@ -410,7 +455,7 @@ export async function runViaHeavyWorker(
     },
     {
       delay: completionWaitTimeoutMs,
-      jobId: `heavy-resume-fallback-${hash(stableJson(identity))}`,
+      jobId: `heavy-resume-fallback-${buildHeavyStepIdentityHash(identity)}`,
     },
   )
   return { result: null, status: "wait" }

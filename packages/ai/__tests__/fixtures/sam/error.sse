@@ -1,0 +1,9 @@
+event: response.created
+data: {"response":{"background":false,"created_at":1789674352.0,"error":null,"id":"resp_6aac4370f3b50295d57e48a6","incomplete_details":null,"instructions":null,"metadata":{"mask_encoding":"one_bit"},"model":"sam-3.1","object":"response","output":[],"parallel_tool_calls":true,"service_tier":"auto","status":"in_progress","store":true,"temperature":1.0,"tool_choice":"auto","tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled"},"sequence_number":0,"type":"response.created"}
+
+event: response.in_progress
+data: {"response":{"background":false,"created_at":1789674352.0,"error":null,"id":"resp_6aac4370f3b50295d57e48a6","incomplete_details":null,"instructions":null,"metadata":{"mask_encoding":"one_bit"},"model":"sam-3.1","object":"response","output":[],"parallel_tool_calls":true,"service_tier":"auto","status":"in_progress","store":true,"temperature":1.0,"tool_choice":"auto","tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled"},"sequence_number":1,"type":"response.in_progress"}
+
+event: response.failed
+data: {"response":{"background":false,"created_at":1789674352.0,"error":{"code":"server_error","message":"The model failed to process the image."},"id":"resp_6aac4370f3b50295d57e48a6","incomplete_details":null,"instructions":null,"metadata":{"mask_encoding":"one_bit"},"model":"sam-3.1","object":"response","output":[],"parallel_tool_calls":true,"service_tier":"auto","status":"failed","store":true,"temperature":1.0,"tool_choice":"auto","tools":[],"top_logprobs":0,"top_p":1.0,"truncation":"disabled"},"sequence_number":2,"type":"response.failed"}
+

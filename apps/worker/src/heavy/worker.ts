@@ -4,6 +4,7 @@ import {
   type HeavyFlowContinuation,
   HeavyJobAction,
   type HeavyJobData,
+  type HeavyStepResultData,
   heavyJobDataSchema,
   heavyStepResultSchema,
   IntegrationJobAction,
@@ -14,6 +15,7 @@ import { type Job, UnrecoverableError } from "bullmq"
 import { normalizeError } from "universal-error-normalizer"
 import { env } from "../env"
 import {
+  buildHeavyStepIdentityHash,
   completeHeavyStep,
   failHeavyStep,
   shouldRunHeavyStep,
@@ -37,6 +39,7 @@ import { extractFallbackTextSnippets } from "./handlers/extract-text-from-file"
 import { generateImageOutput } from "./handlers/generate-image"
 import { processAIFile } from "./handlers/process-ai-file"
 import { recordHeavyAIStepProviderError } from "./handlers/provider-error"
+import { segmentImageOutput } from "./handlers/segment-image"
 import { speechToTextOutput } from "./handlers/speech-to-text"
 import { textToSpeechOutput } from "./handlers/text-to-speech"
 import { waitForHeavyProviderSlot } from "./services/provider-rate-limiter"
@@ -47,14 +50,22 @@ type HeavyStepJobData = Extract<
     type:
       | typeof HeavyJobAction.aiEditImage
       | typeof HeavyJobAction.aiGenerateImage
+      | typeof HeavyJobAction.aiSegmentImage
       | typeof HeavyJobAction.aiSpeechToText
       | typeof HeavyJobAction.aiTextToSpeech
   }
 >
 
+/** SAM has no provider setting: it always runs on the Muse integration. */
+function getHeavyStepProvider(jobData: HeavyStepJobData) {
+  return jobData.type === HeavyJobAction.aiSegmentImage
+    ? ("muse" as const)
+    : jobData.data.step.provider
+}
+
 function getProviderForRateLimit(jobData: HeavyJobData): string | undefined {
-  if ("step" in jobData.data) {
-    return jobData.data.step.provider
+  if (isHeavyFlowStep(jobData)) {
+    return getHeavyStepProvider(jobData)
   }
   if (jobData.type === HeavyJobAction.analyzeImage) {
     return "provider" in jobData.data.providerInfo
@@ -105,7 +116,10 @@ async function resumeHeavyFlow(input: {
   )
 }
 
-async function runHeavyStep(jobData: HeavyStepJobData, job: Job<HeavyJobData>) {
+async function runHeavyStep(
+  jobData: HeavyStepJobData,
+  job: Job<HeavyJobData>,
+): Promise<HeavyStepResultData> {
   const { conversation, contactInbox } =
     await detectConversationAndContactInbox({
       conversationId: jobData.data.conversationId,
@@ -123,35 +137,71 @@ async function runHeavyStep(jobData: HeavyStepJobData, job: Job<HeavyJobData>) {
     switch (jobData.type) {
       case HeavyJobAction.aiEditImage:
         return {
-          status: "success" as const,
-          outputValue: await editImageOutput({
-            ...props,
-            step: jobData.data.step,
-          }),
+          status: "success",
+          outputValues: [
+            {
+              customFieldId: jobData.data.step.outputFieldId,
+              value: await editImageOutput({
+                ...props,
+                step: jobData.data.step,
+              }),
+            },
+          ],
         }
       case HeavyJobAction.aiGenerateImage:
         return {
-          status: "success" as const,
-          outputValue: await generateImageOutput({
-            ...props,
-            step: jobData.data.step,
-          }),
+          status: "success",
+          outputValues: [
+            {
+              customFieldId: jobData.data.step.outputFieldId,
+              value: await generateImageOutput({
+                ...props,
+                step: jobData.data.step,
+              }),
+            },
+          ],
         }
+      case HeavyJobAction.aiSegmentImage:
+        return await segmentImageOutput({
+          ...props,
+          identityHash: buildHeavyStepIdentityHash({
+            action: jobData.type,
+            contactInboxId: jobData.data.contactInboxId,
+            conversationId: jobData.data.conversationId,
+            parentJobId:
+              jobData.data.continuation?.flowExecutionKey ??
+              job.id ??
+              jobData.data.step.id,
+            stepId: jobData.data.step.id,
+          }),
+          jobId: job.id,
+          step: jobData.data.step,
+        })
       case HeavyJobAction.aiSpeechToText:
         return {
-          status: "success" as const,
-          outputValue: await speechToTextOutput({
-            ...props,
-            step: jobData.data.step,
-          }),
+          status: "success",
+          outputValues: [
+            {
+              customFieldId: jobData.data.step.outputFieldId,
+              value: await speechToTextOutput({
+                ...props,
+                step: jobData.data.step,
+              }),
+            },
+          ],
         }
       case HeavyJobAction.aiTextToSpeech:
         return {
-          status: "success" as const,
-          outputValue: await textToSpeechOutput({
-            ...props,
-            step: jobData.data.step,
-          }),
+          status: "success",
+          outputValues: [
+            {
+              customFieldId: jobData.data.step.outputFieldId,
+              value: await textToSpeechOutput({
+                ...props,
+                step: jobData.data.step,
+              }),
+            },
+          ],
         }
       default: {
         const _exhaustive: never = jobData
@@ -161,7 +211,7 @@ async function runHeavyStep(jobData: HeavyStepJobData, job: Job<HeavyJobData>) {
   } catch (err) {
     const error = normalizeError(err)
     await recordHeavyAIStepProviderError({
-      provider: jobData.data.step.provider,
+      provider: getHeavyStepProvider(jobData),
       workspaceId: conversation.workspaceId,
       contactId: conversation.contactId,
       sourceId: contactInbox.sourceId,
@@ -185,7 +235,7 @@ async function runHeavyStep(jobData: HeavyStepJobData, job: Job<HeavyJobData>) {
       throw err
     }
 
-    return { status: "error" as const, errorMessage: error.message }
+    return { status: "error", errorMessage: error.message }
   }
 }
 
@@ -342,6 +392,7 @@ function startHeavyWorker() {
               return
             case HeavyJobAction.aiEditImage:
             case HeavyJobAction.aiGenerateImage:
+            case HeavyJobAction.aiSegmentImage:
             case HeavyJobAction.aiSpeechToText:
             case HeavyJobAction.aiTextToSpeech:
               return await runHeavyStep(jobData, job)
@@ -380,6 +431,34 @@ function startHeavyWorker() {
 
       const stepResult = heavyStepResultSchema.safeParse(result)
       if (
+        !stepResult.success &&
+        isHeavyFlowStep(jobData) &&
+        jobData.data.outcomeKey &&
+        jobData.data.continuation
+      ) {
+        // A malformed producer result must not leave the flow waiting for
+        // the fallback deadline with no reason logged.
+        logger.error(
+          {
+            err: normalizeError(stepResult.error),
+            action: jobData.type,
+            conversationId: jobData.data.conversationId,
+            jobId: job.id,
+            workspaceId,
+          },
+          "Heavy step returned an invalid result",
+        )
+        await failHeavyStep(jobData.data.outcomeKey, stepResult.error)
+        await resumeHeavyFlow({
+          contactInboxId: jobData.data.contactInboxId,
+          continuation: jobData.data.continuation,
+          conversationId: jobData.data.conversationId,
+          jobId: job.id,
+          outcomeKey: jobData.data.outcomeKey,
+          stepId: jobData.data.step.id,
+        })
+      }
+      if (
         stepResult.success &&
         isHeavyFlowStep(jobData) &&
         jobData.data.outcomeKey &&
@@ -394,7 +473,6 @@ function startHeavyWorker() {
           contactId: conversation.contactId,
           contactInboxId: contactInbox.id,
           outcomeKey: jobData.data.outcomeKey,
-          outputFieldId: jobData.data.step.outputFieldId,
           result: stepResult.data,
           workspaceId: conversation.workspaceId,
         })
