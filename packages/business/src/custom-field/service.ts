@@ -23,9 +23,10 @@ import {
 import { withCache } from "@chatbotx.io/redis"
 import { createId, isNumericId } from "@chatbotx.io/utils"
 import {
-  allocateRenamedCustomFieldName,
   customFieldResolutionKey,
   normalizeCustomFieldName,
+  pickCustomFieldRow,
+  planCustomFieldResolution,
 } from "@chatbotx.io/utils/custom-field"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
@@ -282,63 +283,32 @@ class CustomFieldService extends BaseService {
       ),
     )
 
-    const byKey = new Map<string, CustomFieldModel>()
-    /**
-     * Deterministic winner between two rows folding to the same key: exact
-     * (trimmed) name match beats a case-only match; otherwise the lowest id
-     * — the oldest row — wins. Without this the last row of an unordered
-     * `findMany` would win and the mapping would drift between runs.
-     */
-    const pickBetter = (
-      current: CustomFieldModel | undefined,
-      candidate: CustomFieldModel,
-      key: string,
-    ): CustomFieldModel => {
-      if (!current) {
-        return candidate
-      }
-      const requested = requestedNameByKey.get(key)
-      if (requested !== undefined) {
-        const currentExact = current.name.trim() === requested
-        const candidateExact = candidate.name.trim() === requested
-        if (currentExact !== candidateExact) {
-          return candidateExact ? candidate : current
-        }
-      }
-      return candidate.id < current.id ? candidate : current
-    }
-    const remember = (row: CustomFieldModel): void => {
-      const key = customFieldResolutionKey(row)
-      byKey.set(key, pickBetter(byKey.get(key), row, key))
-    }
-
-    const existing = await tx.query.customFieldModel.findMany({
+    const existing = (await tx.query.customFieldModel.findMany({
       where: { workspaceId },
       columns: { id: true, name: true, type: true },
-    })
-    for (const row of existing) {
-      remember(row as CustomFieldModel)
+    })) as CustomFieldModel[]
+    // What to reuse, create and rename is decided by one pure function the
+    // install preview shares, so the preview cannot predict something else.
+    const { plans, winners } = planCustomFieldResolution(existing, uniqueFields)
+    const byKey = new Map<string, CustomFieldModel>(winners)
+    const remember = (row: CustomFieldModel): void => {
+      const key = customFieldResolutionKey(row)
+      byKey.set(
+        key,
+        pickCustomFieldRow(byKey.get(key), row, requestedNameByKey.get(key)),
+      )
     }
 
-    // Case-folded names in use across EVERY type: a name is taken for
-    // `{{name}}` purposes whichever type holds it.
-    const takenNames = new Set(
-      existing.map((row) => normalizeCustomFieldName(row.name)),
-    )
-
-    const missing = uniqueFields.filter(
-      (field) => !byKey.has(customFieldResolutionKey(field)),
-    )
+    const missing: { name: string; type: CustomFieldType }[] = []
     // Requested key -> the name the row will actually be created with.
     const plannedNameByKey = new Map<string, string>()
-    for (const field of missing) {
+    for (const field of uniqueFields) {
       const requestedKey = customFieldResolutionKey(field)
-      const folded = normalizeCustomFieldName(field.name)
-      const plannedName = takenNames.has(folded)
-        ? allocateRenamedCustomFieldName(field.name, takenNames)
-        : field.name
-      takenNames.add(normalizeCustomFieldName(plannedName))
-      plannedNameByKey.set(requestedKey, plannedName)
+      const plan = plans.get(requestedKey)
+      if (plan && plan.action !== "reuse") {
+        missing.push(field)
+        plannedNameByKey.set(requestedKey, plan.plannedName)
+      }
     }
 
     const createdIds: string[] = []

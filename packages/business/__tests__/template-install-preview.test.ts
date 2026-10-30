@@ -84,6 +84,71 @@ describe("predictAction", () => {
   })
 })
 
+describe("previewInstallCollisions: duplicate folded names", () => {
+  const customFieldActions = async (
+    customFields: Record<string, { name: string; type: string }>,
+  ) =>
+    (
+      await previewInstallCollisions({
+        workspaceId: "ws-1",
+        manifests: { ...emptyManifests, customFields } as never,
+      })
+    ).collisions.map((collision) => collision.action)
+
+  test("two template fields sharing a name across types: the second is renamed, as the install does", async () => {
+    expect(
+      await customFieldActions({
+        f1: { name: "age", type: "shortText" },
+        f2: { name: "Age", type: "number" },
+      }),
+    ).toEqual(["create", "rename"])
+  })
+
+  test("two template fields that fold to one key become a single row", async () => {
+    expect(
+      await customFieldActions({
+        f1: { name: "age", type: "shortText" },
+        f2: { name: "AGE ", type: "shortText" },
+      }),
+    ).toEqual(["create", "reuse"])
+  })
+
+  test("points at the row the install picks: the exact-name one, then the oldest", async () => {
+    mocks.customFieldFindMany.mockResolvedValue([
+      { id: "9", name: "Age", type: "number" },
+      { id: "5", name: "age", type: "number" },
+      { id: "3", name: "AGE", type: "number" },
+    ])
+
+    const { collisions } = await previewInstallCollisions({
+      workspaceId: "ws-1",
+      manifests: {
+        ...emptyManifests,
+        customFields: { f1: { name: "age", type: "number" } },
+      } as never,
+    })
+
+    expect(collisions[0]).toMatchObject({ action: "reuse", targetId: "5" })
+  })
+
+  test("with no exact name, the oldest row wins", async () => {
+    mocks.customFieldFindMany.mockResolvedValue([
+      { id: "9", name: "Age", type: "number" },
+      { id: "3", name: "AGE", type: "number" },
+    ])
+
+    const { collisions } = await previewInstallCollisions({
+      workspaceId: "ws-1",
+      manifests: {
+        ...emptyManifests,
+        customFields: { f1: { name: "age", type: "number" } },
+      } as never,
+    })
+
+    expect(collisions[0]).toMatchObject({ action: "reuse", targetId: "3" })
+  })
+})
+
 describe("previewInstallCollisions", () => {
   test("predicts reuse, create and rename per manifest in one pass", async () => {
     mocks.tagFindMany.mockResolvedValue([{ id: "t9", name: "vip" }])

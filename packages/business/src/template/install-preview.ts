@@ -11,11 +11,13 @@ import {
   productCategoryRepository,
 } from "@chatbotx.io/database/repositories"
 import type { TemplateExport } from "@chatbotx.io/flow-config"
-import { customFieldResolutionKey } from "@chatbotx.io/utils/custom-field"
+import {
+  customFieldResolutionKey,
+  planCustomFieldResolution,
+} from "@chatbotx.io/utils/custom-field"
 import type { ManifestKey } from "./adapters/manifests/resolve"
 import { templateAdapterRegistry } from "./adapters/registry"
 import {
-  type CollisionMatch,
   MANIFEST_COLLISION_POLICY,
   type PredictedAction,
   predictAction,
@@ -78,23 +80,32 @@ const previewCustomFields = async (
     where: { workspaceId },
     columns: { id: true, name: true, type: true },
   })
-  const byKey = new Map(
-    rows.map((row) => [customFieldResolutionKey(row), row.id]),
+  // The plan the install executes, so the prediction cannot differ from it.
+  const { plans } = planCustomFieldResolution(
+    rows,
+    entries.map(([, field]) => field),
   )
-  const names = new Set(rows.map((row) => normalize(row.name)))
+  const seen = new Set<string>()
   return entries.map(([sourceId, field]) => {
-    const targetId = byKey.get(customFieldResolutionKey(field))
-    const match: CollisionMatch = {
-      found: targetId !== undefined,
-      sameNameOtherType:
-        targetId === undefined && names.has(normalize(field.name)),
-    }
+    const key = customFieldResolutionKey(field)
+    const plan = plans.get(key)
+    // Fields of one template that fold to one key become a single row; the
+    // later ones reuse what the first creates.
+    const duplicate = seen.has(key)
+    seen.add(key)
+    const action: PredictedAction =
+      duplicate || plan?.action === "reuse"
+        ? "reuse"
+        : predictAction("customFields", {
+            found: false,
+            sameNameOtherType: plan?.action === "rename",
+          })
     return {
       manifest: "customFields",
       sourceId,
       name: field.name,
-      action: predictAction("customFields", match),
-      targetId,
+      action,
+      targetId: plan?.action === "reuse" ? plan.row.id : undefined,
     }
   })
 }

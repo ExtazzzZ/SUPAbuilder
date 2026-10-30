@@ -70,6 +70,31 @@ export const customFieldResolutionKey = (field: {
 }): string => `${field.type}:${field.name.trim().toLowerCase()}`
 
 /**
+ * Deterministic winner between two rows folding to the same resolution key:
+ * a row whose trimmed name is exactly `requestedName` beats a case-only match;
+ * otherwise the lowest id (the oldest row) wins. Without it the last row of an
+ * unordered query would win and the mapping would drift between runs. Shared
+ * by the install and its preview so both pick the same row.
+ */
+export const pickCustomFieldRow = <T extends { id: string; name: string }>(
+  current: T | undefined,
+  candidate: T,
+  requestedName: string | undefined,
+): T => {
+  if (!current) {
+    return candidate
+  }
+  if (requestedName !== undefined) {
+    const currentExact = current.name.trim() === requestedName
+    const candidateExact = candidate.name.trim() === requestedName
+    if (currentExact !== candidateExact) {
+      return candidateExact ? candidate : current
+    }
+  }
+  return candidate.id < current.id ? candidate : current
+}
+
+/**
  * The fold two custom-field names must share to count as "the same name": the
  * runtime resolves `{{name}}` without regard to type, so uniqueness that
  * matters to a message variable is case- and whitespace-insensitive across
@@ -98,6 +123,81 @@ export const allocateRenamedCustomFieldName = (
       return candidate
     }
   }
+}
+
+export type CustomFieldResolutionPlan<Row extends { id: string }> =
+  | { action: "reuse"; row: Row }
+  | { action: "create"; plannedName: string }
+  | { action: "rename"; plannedName: string }
+
+/**
+ * What resolving `fields` against the workspace's `existing` fields does, as a
+ * pure function: a field whose key (type and folded name) exists is reused (the
+ * winner of `pickCustomFieldRow` when several fold together); otherwise it is
+ * created, under a numbered name when the folded name is already used by a
+ * field of ANOTHER type or by an earlier field of this same request (a message
+ * variable `{{name}}` cannot tell types apart). The install executes this plan
+ * and the install preview predicts with it, so the two cannot disagree.
+ *
+ * Fields that share a key are one request: the last one given stands, as the
+ * install has always deduplicated them.
+ */
+export const planCustomFieldResolution = <
+  Row extends { id: string; name: string; type: CustomFieldType },
+>(
+  existing: readonly Row[],
+  fields: readonly { name: string; type: CustomFieldType }[],
+): {
+  /** In the order the install creates them. */
+  requests: { name: string; type: CustomFieldType }[]
+  plans: Map<string, CustomFieldResolutionPlan<Row>>
+  /** The winning existing row per key, for every key (requested or not). */
+  winners: Map<string, Row>
+} => {
+  const requests = [
+    ...new Map(
+      fields.map((field) => [customFieldResolutionKey(field), field]),
+    ).values(),
+  ]
+  const requestedNameByKey = new Map(
+    requests.map((field) => [
+      customFieldResolutionKey(field),
+      field.name.trim(),
+    ]),
+  )
+  const winners = new Map<string, Row>()
+  for (const row of existing) {
+    const key = customFieldResolutionKey(row)
+    winners.set(
+      key,
+      pickCustomFieldRow(winners.get(key), row, requestedNameByKey.get(key)),
+    )
+  }
+  const takenNames = new Set(
+    existing.map((row) => normalizeCustomFieldName(row.name)),
+  )
+  const plans = new Map<string, CustomFieldResolutionPlan<Row>>()
+  for (const field of requests) {
+    const key = customFieldResolutionKey(field)
+    const winner = winners.get(key)
+    if (winner) {
+      plans.set(key, { action: "reuse", row: winner })
+      continue
+    }
+    const folded = normalizeCustomFieldName(field.name)
+    const taken = takenNames.has(folded)
+    const plannedName = taken
+      ? allocateRenamedCustomFieldName(field.name, takenNames)
+      : field.name
+    takenNames.add(normalizeCustomFieldName(plannedName))
+    plans.set(
+      key,
+      taken
+        ? { action: "rename", plannedName }
+        : { action: "create", plannedName },
+    )
+  }
+  return { requests, plans, winners }
 }
 
 // Boolean vocabulary = Postgres's own boolean input literals, so a stored
