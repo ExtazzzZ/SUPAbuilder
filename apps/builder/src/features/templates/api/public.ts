@@ -287,7 +287,7 @@ const templatesPublicRouter = {
       description:
         "Read only. Given the `selection` you would give `templates.create`, lists the resources that are included automatically because a selected one needs them (`includedDependencies`) and the tags, custom fields, folders and the like the template ships (`manifests`). Ids in `includedDependencies` are this workspace's; names come from `templates.listSelectableResources` for the same category.",
       tags: TAGS,
-      spec: mcpSpec({ readOnlyHint: true }),
+      spec: mcpSpec({ hitlPolicy: "none", readOnlyHint: true }),
     })
     .input(previewTemplateDependenciesPublicRequest)
     .output(templateDependenciesResponse)
@@ -310,7 +310,7 @@ const templatesPublicRouter = {
       description:
         "Read only. Of the given ids of one resource kind, returns those installed from a view-only template: editing their content is refused with `templateAllowEditViolation`. Use it before editing a flow, keyword, trigger, sequence, AI agent, product or similar, with ids from that resource's own list operation.",
       tags: TAGS,
-      spec: mcpSpec({ readOnlyHint: true }),
+      spec: mcpSpec({ hitlPolicy: "none", readOnlyHint: true }),
     })
     .input(listLockedResourcesPublicRequest)
     .output(listLockedResourcesResponse)
