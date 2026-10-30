@@ -78,6 +78,10 @@ RUN mkdir -p /app/seed-runner \
     --bundle --platform=node --format=cjs \
     --outfile=/app/seed-runner/seed.cjs \
     --external:pg
+RUN pnpm --filter "@chatbotx.io/database" exec esbuild src/seed/run-test-bootstrap.ts \
+    --bundle --platform=node --format=cjs \
+    --outfile=/app/seed-runner/test-bootstrap.cjs \
+    --external:pg
 
 WORKDIR /app/seed-runner
 RUN bash /app/migrate-runner/scripts/create-runner-package.sh seed /app/migrate-runner/database-package.json > package.json \
@@ -87,8 +91,13 @@ WORKDIR /app
 
 # Build the application
 FROM base AS release
+RUN groupadd --system --gid 1001 nodejs \
+  && useradd --system --uid 1001 --gid nodejs nextjs
 
 COPY apps/builder/docker/rootfs/ /
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY LICENSE /app/LICENSE
+COPY apps/builder/src/enterprise/LICENSE /app/apps/builder/src/enterprise/LICENSE
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
@@ -98,6 +107,8 @@ COPY --from=deps --chown=nextjs:nodejs /app/apps/builder/.next/static ./apps/bui
 COPY --from=deps --chown=nextjs:nodejs /app/apps/builder/public ./apps/builder/public
 COPY --from=deps --chown=nextjs:nodejs /app/migrate-runner ./migrate-runner
 COPY --from=deps --chown=nextjs:nodejs /app/seed-runner ./seed-runner
+
+USER nextjs
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 # Default command passed to the entrypoint. `serve` runs env-gated migrate/seed

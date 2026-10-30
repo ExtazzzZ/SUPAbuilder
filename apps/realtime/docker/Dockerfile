@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY apps/realtime/docker/rootfs/ /
+COPY LICENSE /app/LICENSE
+COPY packages/database/src/schema/enterprise/LICENSE /app/packages/database/src/schema/enterprise/LICENSE
 
 COPY --from=pre /app/out/json/ .
 RUN pnpm install --frozen-lockfile

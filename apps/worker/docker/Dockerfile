@@ -37,6 +37,8 @@ RUN apt update && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/*
 COPY apps/worker/docker/rootfs/ /
+COPY LICENSE /app/LICENSE
+COPY packages/database/src/schema/enterprise/LICENSE /app/packages/database/src/schema/enterprise/LICENSE
 
 COPY --from=deps /app/apps/worker/dist /app/apps/worker/dist
 # The bundle leaves the native `sharp` addon external (tsdown `neverBundle`);

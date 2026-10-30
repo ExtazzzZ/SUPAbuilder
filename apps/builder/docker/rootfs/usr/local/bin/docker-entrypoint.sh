@@ -14,10 +14,16 @@ run_seed() {
   SKIP_ENV_CHECK="${SKIP_ENV_CHECK:-true}" NODE_OPTIONS="--no-node-snapshot --enable-source-maps" node /app/seed-runner/seed.cjs
 }
 
+run_test_bootstrap() {
+  echo "Running TEST bootstrap..."
+  SKIP_ENV_CHECK="${SKIP_ENV_CHECK:-true}" NODE_OPTIONS="--no-node-snapshot --enable-source-maps" node /app/seed-runner/test-bootstrap.cjs
+}
+
 start_server() {
   # Backward-compatible env gating (no command passed): migrate/seed, then serve.
   if [ "${RUN_DB_MIGRATE:-}" = "true" ]; then run_migrate; fi
   if [ "${RUN_DB_SEED:-}" = "true" ]; then run_seed; fi
+  if [ "${RUN_TEST_BOOTSTRAP:-}" = "true" ]; then run_test_bootstrap; fi
   NODE_OPTIONS="--no-node-snapshot --enable-source-maps" HOSTNAME="${HOSTNAME:-0.0.0.0}" PORT="${PORT:-3000}" \
     exec node apps/builder/server.js
 }
