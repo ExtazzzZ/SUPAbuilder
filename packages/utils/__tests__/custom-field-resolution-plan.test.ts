@@ -89,7 +89,7 @@ describe("planCustomFieldResolution", () => {
     expect(plans.size).toBe(1)
   })
 
-  test("a rename never collides with a name already planned in the same request", () => {
+  test("a rename skips a numbered name that already exists", () => {
     const { plans } = planCustomFieldResolution(
       [row("1", "Age", "number"), row("2", "age_1", "shortText")],
       [{ name: "age", type: "shortText" }],
@@ -97,6 +97,25 @@ describe("planCustomFieldResolution", () => {
     expect(plans.get("shortText:age")).toEqual({
       action: "rename",
       plannedName: "age_2",
+    })
+  })
+
+  test("a rename never collides with a name planned earlier in the same request", () => {
+    const { plans } = planCustomFieldResolution(
+      [row("1", "Age", "number")],
+      [
+        { name: "age", type: "shortText" },
+        { name: "age_1", type: "number" },
+      ],
+    )
+    expect(plans.get("shortText:age")).toEqual({
+      action: "rename",
+      plannedName: "age_1",
+    })
+    // "age_1" was just taken by the first rename, so the second must move on.
+    expect(plans.get("number:age_1")).toEqual({
+      action: "rename",
+      plannedName: "age_1_1",
     })
   })
 })
