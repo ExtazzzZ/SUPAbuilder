@@ -1,5 +1,6 @@
 import {
   type ListSelectableResourcesResult,
+  type TemplateActor,
   templateService,
 } from "@chatbotx.io/business"
 import type { TemplateCategory } from "@chatbotx.io/database/partials"
@@ -15,5 +16,6 @@ export const listSelectableResources = async (input: {
   keyword?: string | null
   cursor?: string | null
   limit?: number | null
+  actor: TemplateActor
 }): Promise<ListSelectableResourcesResult> =>
   await templateService.listSelectableResources(input)

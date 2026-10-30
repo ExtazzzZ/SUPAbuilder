@@ -1,0 +1,1 @@
+CREATE INDEX "AIFile_queuedAt_queued_idx" ON "AIFile" (("processingRun"->>'queuedAt')) WHERE "processingRun"->>'status' = 'queued';

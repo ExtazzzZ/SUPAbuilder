@@ -15,7 +15,11 @@ import { isSameJsonValue } from "../audit/diff"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { folderService } from "../folder/service"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import {
   type ConditionInput,
   toConditionColumnsShared as toConditionColumns,
@@ -182,6 +186,13 @@ class TriggerService extends BaseService {
     const { workspaceId, id, actions, conditions } = input
 
     const result = await db.transaction(async (tx) => {
+      await assertResourceEditable({
+        workspaceId,
+        resourceKind: "trigger",
+        resourceIds: [id],
+        changedKeys: ["actions", "conditions"],
+        tx,
+      })
       const [existingTrigger, existingConditions] = await Promise.all([
         tx.query.triggerModel.findFirst({
           where: {
@@ -333,39 +344,57 @@ class TriggerService extends BaseService {
   > {
     const { workspaceId, id, ...patch } = input
 
-    const trigger = await db.query.triggerModel.findFirst({
-      where: {
-        id,
-        workspaceId,
-      },
-    })
+    // The trigger is locked before the stored row is read, so the diff that
+    // decides the guard is computed under the lock; the audit follows commit.
+    const { trigger, changedEntries, updated } =
+      await withTemplateLockedTransaction(
+        async (tx) => {
+          const current = await tx.query.triggerModel.findFirst({
+            where: { id, workspaceId },
+          })
 
-    if (!trigger) {
-      throw notFoundException("Trigger not found")
-    }
+          if (!current) {
+            throw notFoundException("Trigger not found")
+          }
 
-    const changedEntries = Object.entries(patch).filter(
-      ([key, value]) => trigger[key as keyof typeof patch] !== value,
-    )
+          const entries = Object.entries(patch).filter(
+            ([key, value]) => current[key as keyof typeof patch] !== value,
+          )
+          if (entries.length === 0) {
+            return {
+              trigger: current,
+              changedEntries: entries,
+              updated: [] as { id: string }[],
+            }
+          }
 
-    if (changedEntries.length > 0) {
-      const updated = await db
-        .update(triggerModel)
-        .set(patch)
-        .where(eq(triggerModel.id, trigger.id))
-        .returning({ id: triggerModel.id })
+          await assertResourceEditable({
+            workspaceId,
+            resourceKind: "trigger",
+            resourceIds: [current.id],
+            changedKeys: entries.map(([key]) => key),
+            tx,
+          })
+          const rows = await tx
+            .update(triggerModel)
+            .set(patch)
+            .where(eq(triggerModel.id, current.id))
+            .returning({ id: triggerModel.id })
+          return { trigger: current, changedEntries: entries, updated: rows }
+        },
+        { initialKeys: [{ kind: "trigger", resourceId: id }] },
+      )
 
-      if (updated.length > 0) {
-        const changedKeys = changedEntries.map(([key]) => key)
-        let detail = `updated a trigger (#${trigger.id})`
-        if (changedKeys.length === 1 && changedKeys[0] === "active") {
-          detail = patch.active
-            ? `enabled a trigger (#${trigger.id})`
-            : `disabled a trigger (#${trigger.id})`
-        }
-
-        await this.audit("update", detail)
+    if (changedEntries.length > 0 && updated.length > 0) {
+      const changedKeys = changedEntries.map(([key]) => key)
+      let detail = `updated a trigger (#${trigger.id})`
+      if (changedKeys.length === 1 && changedKeys[0] === "active") {
+        detail = patch.active
+          ? `enabled a trigger (#${trigger.id})`
+          : `disabled a trigger (#${trigger.id})`
       }
+
+      await this.audit("update", detail)
     }
 
     const withConditions = await triggerRepository.findWithConditions({

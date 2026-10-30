@@ -15,7 +15,12 @@ import { notFoundException, validationException } from "../errors"
 import { inboxService } from "../inbox/service"
 import { mediaLibraryFileService } from "../media-library-file/service"
 import { type IdLabel, selectLabelsByIds } from "../select-labels-by-ids"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import { resolveWorkspaceFreezeReasonById } from "../workspace-lifecycle/with-blocked-owner-guard"
 
 type SelectOptionRow = { id: string; name: string }
@@ -121,25 +126,53 @@ class ReflinkService extends BaseService {
     ctx: { workspaceId: string; id: string },
     data: ReflinkUpdateData,
   ): Promise<ReflinkModel> {
-    const reflink = await this.findOrFail(ctx)
-
     const hasChanges = Object.values(data).some((value) => value !== undefined)
     if (!hasChanges) {
-      return reflink
+      return await this.findOrFail(ctx)
     }
 
     try {
-      const [updated] = await db
-        .update(reflinkModel)
-        .set(data)
-        .where(
-          and(
-            eq(reflinkModel.id, reflink.id),
-            eq(reflinkModel.workspaceId, ctx.workspaceId),
-            eq(reflinkModel.type, "refLink"),
-          ),
-        )
-        .returning()
+      // The ref link and a re-pointed flow are locked before the stored row is
+      // read, so the diff that decides the guard is computed under the lock.
+      const updated = await withTemplateLockedTransaction(
+        async (tx) => {
+          const reflink = await reflinkRepository.findByIdAndWorkspace(ctx, tx)
+          if (!reflink) {
+            throw notFoundException("Reflink not found")
+          }
+          await assertResourceEditable({
+            workspaceId: ctx.workspaceId,
+            resourceKind: "reflink",
+            resourceIds: [reflink.id],
+            changedKeys: changedKeysOf(reflink, data),
+            // A re-pointed flow is a parent the write references.
+            referencedParents: data.flowId
+              ? [{ kind: "flow", resourceId: data.flowId }]
+              : [],
+            tx,
+          })
+          const [row] = await tx
+            .update(reflinkModel)
+            .set(data)
+            .where(
+              and(
+                eq(reflinkModel.id, reflink.id),
+                eq(reflinkModel.workspaceId, ctx.workspaceId),
+                eq(reflinkModel.type, "refLink"),
+              ),
+            )
+            .returning()
+          return row
+        },
+        {
+          initialKeys: [
+            { kind: "reflink", resourceId: ctx.id },
+            ...(data.flowId
+              ? [{ kind: "flow" as const, resourceId: data.flowId }]
+              : []),
+          ],
+        },
+      )
       return updated
     } catch (error) {
       if (isUniqueViolationError(error)) {
@@ -153,7 +186,8 @@ class ReflinkService extends BaseService {
     ctx: { workspaceId: string; id: string },
     settings: ReflinkWidgetSettings,
   ): Promise<ReflinkModel> {
-    const reflink = await this.findOrFail(ctx)
+    // Early not-found; the row is read again under the lock below.
+    await this.findOrFail(ctx)
     const [hiddenInboxes] = await Promise.all([
       inboxService.listLabelsByIds({
         workspaceId: ctx.workspaceId,
@@ -162,26 +196,52 @@ class ReflinkService extends BaseService {
       this.assertWidgetLogo(ctx.workspaceId, settings.logoFileId),
     ])
 
-    const [updated] = await db
-      .update(reflinkModel)
-      .set({
-        widgetAuthorizedDomains: normalizeDomains(settings.authorizedDomains),
-        widgetHiddenInboxIds: hiddenInboxes.map((inbox) => inbox.id),
-        widgetLogoFileId: settings.logoFileId || null,
-        // The request sets brand name and URL together; both empty hides the
-        // powered-by line.
-        widgetBrandName: settings.brandName || null,
-        widgetBrandUrl: settings.brandUrl || null,
-        widgetLogoBackgroundColor: settings.logoBackgroundColor,
-      })
-      .where(
-        and(
-          eq(reflinkModel.id, reflink.id),
-          eq(reflinkModel.workspaceId, ctx.workspaceId),
-          eq(reflinkModel.type, "refLink"),
-        ),
-      )
-      .returning()
+    const [updated] = await withTemplateLockedTransaction(
+      async (tx) => {
+        // The lock is held before the stored row is read, so a sync/restore/
+        // uninstall cannot race a branding edit and the diff is not stale.
+        const reflink = await reflinkRepository.findByIdAndWorkspace(ctx, tx)
+        if (!reflink) {
+          throw notFoundException("Reflink not found")
+        }
+        // The widget's allowed domains and hidden inboxes belong to the
+        // installer; only a changed logo (branding) is template content.
+        const logoChanged =
+          (settings.logoFileId || null) !== (reflink.widgetLogoFileId ?? null)
+        if (logoChanged) {
+          await assertResourceEditable({
+            workspaceId: ctx.workspaceId,
+            resourceKind: "reflink",
+            resourceIds: [reflink.id],
+            changedKeys: ["branding"],
+            tx,
+          })
+        }
+        return await tx
+          .update(reflinkModel)
+          .set({
+            widgetAuthorizedDomains: normalizeDomains(
+              settings.authorizedDomains,
+            ),
+            widgetHiddenInboxIds: hiddenInboxes.map((inbox) => inbox.id),
+            widgetLogoFileId: settings.logoFileId || null,
+            // The request sets brand name and URL together; both empty hides the
+            // powered-by line.
+            widgetBrandName: settings.brandName || null,
+            widgetBrandUrl: settings.brandUrl || null,
+            widgetLogoBackgroundColor: settings.logoBackgroundColor,
+          })
+          .where(
+            and(
+              eq(reflinkModel.id, reflink.id),
+              eq(reflinkModel.workspaceId, ctx.workspaceId),
+              eq(reflinkModel.type, "refLink"),
+            ),
+          )
+          .returning()
+      },
+      { initialKeys: [{ kind: "reflink", resourceId: ctx.id }] },
+    )
     return updated
   }
 

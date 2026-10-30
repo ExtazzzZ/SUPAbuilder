@@ -1,4 +1,10 @@
-import { templateService, workspaceMemberService } from "@chatbotx.io/business"
+import {
+  canUseTemplateCategories,
+  type PublicTemplateProjection,
+  templateInstallationRequestService,
+  templateService,
+  workspaceMemberService,
+} from "@chatbotx.io/business"
 import { AspectRatio } from "@chatbotx.io/ui/components/ui/aspect-ratio"
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
@@ -16,7 +22,6 @@ import { cache } from "react"
 import { PublicMessage } from "@/components/public-message"
 import { WorkspacePicker } from "@/features/templates/components/workspace-picker"
 import { getTenantSettings } from "@/features/tenant/utils"
-import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
 import { getCurrentUser } from "@/lib/auth/utils"
 
 // Publisher-supplied free text. YouTube IDs are always 11 chars from this
@@ -174,6 +179,7 @@ export default async function PublicTemplatePage(
         <CardFooter className="flex flex-col items-stretch gap-3 bg-muted/40 py-6">
           {user ? (
             <InstallSection
+              categoryCounts={template.categoryCounts}
               shareToken={shareToken}
               tenantId={template.tenantId}
               userId={user.id}
@@ -191,10 +197,12 @@ export default async function PublicTemplatePage(
 }
 
 async function InstallSection({
+  categoryCounts,
   shareToken,
   tenantId,
   userId,
 }: {
+  categoryCounts: PublicTemplateProjection["categoryCounts"]
   shareToken: string
   tenantId: string
   userId: string
@@ -204,13 +212,17 @@ async function InstallSection({
 
   // The tenant filter here is UI convenience only — `installTemplateAction`
   // re-checks both membership (via `workspaceActionClient`) and the
-  // same-tenant gate (via `templateService.assertInstallable`) server-side,
+  // same-tenant gate and per-category permissions (via
+  // `templateService.assertInstallable`) server-side,
   // so a forged workspace id in a direct action call still fails.
   const installableWorkspaces = members
     .filter(
       (member) =>
         member.workspace.tenantId === tenantId &&
-        hasWorkspacePermission(member.permissions, "superAdmin"),
+        canUseTemplateCategories(
+          { kind: "member", permissions: member.permissions },
+          categoryCounts,
+        ),
     )
     .map((member) => member.workspace)
 
@@ -222,8 +234,30 @@ async function InstallSection({
     )
   }
 
+  // Inboxes the template was built around: the installer says which of their
+  // own stand in for them. Offered per workspace, since the choice follows it.
+  const requiredInboxes =
+    await templateInstallationRequestService.findRequiredInboxes(shareToken)
+  const channels = [
+    ...new Set(requiredInboxes.map((inbox) => inbox.channelType)),
+  ]
+  const inboxOptions =
+    await templateInstallationRequestService.listBindableInboxes({
+      workspaceIds: installableWorkspaces.map((workspace) => workspace.id),
+      channels,
+    })
+
+  const installedCopies =
+    await templateInstallationRequestService.listInstalledCopies({
+      shareToken,
+      workspaceIds: installableWorkspaces.map((workspace) => workspace.id),
+    })
+
   return (
     <WorkspacePicker
+      inboxOptions={inboxOptions}
+      installedCopies={installedCopies}
+      requiredInboxes={requiredInboxes}
       shareToken={shareToken}
       workspaces={installableWorkspaces}
     />

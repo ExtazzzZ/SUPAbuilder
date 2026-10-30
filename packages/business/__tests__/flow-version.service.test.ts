@@ -26,6 +26,20 @@ const {
   }
 })
 
+// The template lock guard has its own suite; these tests cover the service.
+vi.mock("../src/template/installed-resource.service", () => ({
+  assertDeletable: vi.fn(),
+  assertResourceEditable: vi.fn(),
+}))
+
+// Run the locked transaction against the same mocked client the tests assert on.
+vi.mock("../src/template/template-resource-locks", async () => {
+  const { db } = await import("@chatbotx.io/database/client")
+  return {
+    withTemplateLockedTransaction: (run: (tx: unknown) => unknown) => run(db),
+  }
+})
+
 vi.mock("@chatbotx.io/database/client", () => ({
   db: {
     query: {

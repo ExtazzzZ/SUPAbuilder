@@ -69,6 +69,37 @@ export const customFieldResolutionKey = (field: {
   type: CustomFieldType
 }): string => `${field.type}:${field.name.trim().toLowerCase()}`
 
+/**
+ * The fold two custom-field names must share to count as "the same name": the
+ * runtime resolves `{{name}}` without regard to type, so uniqueness that
+ * matters to a message variable is case- and whitespace-insensitive across
+ * ALL types, unlike the DB's `(workspaceId, type, name)` index.
+ */
+export const normalizeCustomFieldName = (name: string): string =>
+  name.trim().toLowerCase()
+
+const MAX_CUSTOM_FIELD_NAME_LENGTH = 255
+
+/**
+ * `<name>_<n>` for the smallest `n` whose normalized form is not in `taken`
+ * (the normalized names already in use across every type). The base is
+ * shortened when needed so the suffixed name stays within the length limit.
+ */
+export const allocateRenamedCustomFieldName = (
+  name: string,
+  taken: ReadonlySet<string>,
+  maxLength = MAX_CUSTOM_FIELD_NAME_LENGTH,
+): string => {
+  const base = name.trim()
+  for (let suffix = 1; ; suffix++) {
+    const tail = `_${suffix}`
+    const candidate = `${base.slice(0, Math.max(1, maxLength - tail.length))}${tail}`
+    if (!taken.has(normalizeCustomFieldName(candidate))) {
+      return candidate
+    }
+  }
+}
+
 // Boolean vocabulary = Postgres's own boolean input literals, so a stored
 // value is always castable with `::boolean`. Shared by write-side
 // normalization (business), the contact-filter SQL guard (database), and

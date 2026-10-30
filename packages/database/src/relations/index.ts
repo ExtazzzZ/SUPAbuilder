@@ -155,6 +155,7 @@ import { telegramChatRelations } from "./telegram-chat"
 import { templateRelations } from "./template"
 import { templateInstallationRelations } from "./template-installation"
 import { templateInstalledResourceRelations } from "./template-installed-resource"
+import { templateVersionRelations } from "./template-version"
 import { triggerRelations } from "./trigger"
 import { conditionRelations } from "./trigger-condition"
 import { triggerContactHistoryRelations } from "./trigger-contact-history"
@@ -196,6 +197,7 @@ export const relations = {
   ...templateRelations,
   ...templateInstallationRelations,
   ...templateInstalledResourceRelations,
+  ...templateVersionRelations,
   ...accountRelations,
   ...userRelations,
   ...workspaceRelations,

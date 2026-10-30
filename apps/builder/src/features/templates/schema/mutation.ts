@@ -58,6 +58,15 @@ export const updateShareSettingsRequest = z.object({
   shareExpiresAt: z.string().datetime().nullable().optional(),
 })
 
+export const inboxBindingsSchema = z.record(
+  zodBigintAsString(),
+  zodBigintAsString(),
+)
+
 export const installTemplateRequest = z.object({
   shareToken: z.string().trim().min(1),
+  allowDuplicate: z.boolean().optional(),
+  autoUpdate: z.boolean().optional(),
+  acceptPublisherUninstall: z.boolean().optional(),
+  inboxBindings: inboxBindingsSchema.optional(),
 })

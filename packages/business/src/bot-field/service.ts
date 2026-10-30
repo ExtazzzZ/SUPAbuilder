@@ -43,7 +43,13 @@ import {
   validationException,
 } from "../errors"
 import { folderService } from "../folder/service"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { TEMPLATE_LOCKED_CONTENT_KEYS } from "../template/lock-policy"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import type { PaginatedResult } from "../types"
 
 type ListBotFieldsInput = {
@@ -452,9 +458,65 @@ class BotFieldService extends BaseService {
     workspaceId: string
     existing: BotFieldModel
     data: UpdateBotFieldData
+    /** A caller-owned transaction; absent, a locked one is opened here. */
     tx?: DatabaseClient
   }): Promise<BotFieldModel> {
-    const { workspaceId, existing, data, tx = db } = props
+    const { workspaceId, existing, data, tx } = props
+    if (tx) {
+      const updated = await this.writeUpdate({
+        workspaceId,
+        existing,
+        data,
+        tx,
+      })
+      await this.invalidate({ workspaceId, ids: [existing.id] })
+      return updated
+    }
+    // A bare `db` would release the advisory lock at statement end, so the
+    // guard and the write run in one locked transaction; the cache is dropped
+    // after it commits. The field's lock is taken before the stored row is
+    // re-read, so the diff that decides the guard is computed under the lock.
+    const updated = await withTemplateLockedTransaction(
+      (lockedTx) =>
+        this.writeUpdate({ workspaceId, existing, data, tx: lockedTx }),
+      {
+        initialKeys: this.touchesLockedContent(data)
+          ? [{ kind: "botField", resourceId: existing.id }]
+          : [],
+      },
+    )
+    await this.invalidate({ workspaceId, ids: [existing.id] })
+    return updated
+  }
+
+  /** A patch with none of the kind's content keys can never trip the guard, so it needs neither the lock nor a re-read. */
+  private touchesLockedContent(data: UpdateBotFieldData): boolean {
+    return Object.keys(data).some((key) =>
+      TEMPLATE_LOCKED_CONTENT_KEYS.botField.includes(key),
+    )
+  }
+
+  private async writeUpdate(props: {
+    workspaceId: string
+    existing: BotFieldModel
+    data: UpdateBotFieldData
+    tx: DatabaseClient
+  }): Promise<BotFieldModel> {
+    const { workspaceId, data, tx } = props
+
+    // The row the caller read may predate a sync's write; the diff is taken
+    // against the row as it stands now, inside the transaction.
+    const existing = this.touchesLockedContent(data)
+      ? await this.reloadForUpdate({ workspaceId, id: props.existing.id, tx })
+      : props.existing
+
+    await assertResourceEditable({
+      workspaceId,
+      resourceKind: "botField",
+      resourceIds: [existing.id],
+      changedKeys: changedKeysOf(existing, data),
+      tx,
+    })
 
     if (data.folderId && data.folderId !== existing.folderId) {
       await folderService.ensureExists({
@@ -464,23 +526,61 @@ class BotFieldService extends BaseService {
       })
     }
 
-    let updated: BotFieldModel
+    if (data.name !== undefined) {
+      await this.lockNames(tx, workspaceId)
+    }
     try {
-      ;[updated] = await tx
+      const [updated] = await tx
         .update(botFieldModel)
         .set(data)
         .where(eq(botFieldModel.id, existing.id))
         .returning()
+      return updated
     } catch (error) {
       if (isUniqueViolationError(error)) {
         throw validationException("name", "Name is already taken")
       }
       throw error
     }
+  }
 
-    await this.invalidate({ workspaceId, ids: [existing.id] })
+  private async reloadForUpdate(props: {
+    workspaceId: string
+    id: string
+    tx: DatabaseClient
+  }): Promise<BotFieldModel> {
+    const row = await props.tx.query.botFieldModel.findFirst({
+      where: { workspaceId: props.workspaceId, id: props.id },
+    })
+    if (!row) {
+      throw notFoundException("Bot field not found")
+    }
+    return row
+  }
 
-    return updated
+  /**
+   * Serializes every bot-field name write of one workspace (transaction-scoped,
+   * held until the surrounding transaction commits), so a template install that
+   * looked a name up can create it without a concurrent writer taking it first.
+   * Same pattern as the custom-field `cf-names:` lock.
+   */
+  async lockNames(tx: DatabaseClient, workspaceId: string): Promise<void> {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`bf-names:${workspaceId}`}, 0))`,
+    )
+  }
+
+  /** The bot field with exactly this `(name, type)`, the pair the unique index keys on. */
+  async findByNameAndType(props: {
+    workspaceId: string
+    name: string
+    type: CustomFieldType
+    tx?: DatabaseClient
+  }): Promise<BotFieldModel | undefined> {
+    const { workspaceId, name, type, tx = db } = props
+    return await tx.query.botFieldModel.findFirst({
+      where: { workspaceId, name, type },
+    })
   }
 
   async create(props: {
@@ -504,6 +604,7 @@ class BotFieldService extends BaseService {
       data,
     )
 
+    await this.lockNames(tx, workspaceId)
     let botField: BotFieldModel
     try {
       ;[botField] = await tx
@@ -527,7 +628,7 @@ class BotFieldService extends BaseService {
     data: UpdateBotFieldData
     tx?: DatabaseClient
   }): Promise<BotFieldModel> {
-    const { workspaceId, key, data, tx = db } = props
+    const { workspaceId, key, data, tx } = props
     const existing = await this.findByKeyOrFail({ workspaceId, key, tx })
 
     const preparedData = await this.prepareValuePatch(

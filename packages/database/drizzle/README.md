@@ -21,3 +21,10 @@ a `drizzle-kit generate` run at their point in history):
 Verified at synthesis time: `drizzle-kit generate` → "No schema changes" and
 `drizzle-kit check` → clean. Branches that do not carry these two files will
 still hit the three-head error until they rebase/merge onto them.
+
+## Template enum migrations are forward-only
+
+The `templateResourceCategory` / `templateInstallationStatus` `ADD VALUE`
+statements in `20261029083526_template_resource_categories` cannot be
+reversed: PostgreSQL has no `DROP VALUE` for enums. A rolled-back app version
+simply ignores the extra values. Deploy readers and workers before writers.

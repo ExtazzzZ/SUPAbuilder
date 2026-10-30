@@ -71,6 +71,27 @@ vi.mock("@chatbotx.io/database/client", () => ({
   and: vi.fn((...args: unknown[]) => ({ and: args })),
 }))
 
+// The locked transaction runs the body against the same mocked client.
+vi.mock("../src/template/template-resource-locks", () => ({
+  withTemplateLockedTransaction: (run: (tx: unknown) => unknown) =>
+    run({
+      delete: mockDelete,
+      insert: mockInsert,
+      update: mockUpdate,
+      query: {
+        aiFunctionModel: {
+          findFirst: mockFindFirst,
+          findMany: mockFindMany,
+        },
+        templateInstalledResourceModel: {
+          findMany: mockInstalledResourceFindMany,
+        },
+        templateInstallationModel: { findMany: mockInstallationFindMany },
+      },
+      execute: vi.fn(),
+    }),
+}))
+
 vi.mock("@chatbotx.io/database/schema", () => ({
   aiFunctionModel: {
     id: "id",

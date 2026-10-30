@@ -17,6 +17,7 @@ import {
   notFoundException,
   validationException,
 } from "../errors"
+import { assertResourceEditable } from "../template/installed-resource.service"
 import {
   type PipelineAccessScope,
   type PipelineAction,
@@ -134,6 +135,14 @@ export class PipelineBaseService extends BaseService {
   ): Promise<T> {
     await this.requireAccess({ ...input, action: "manageSettings" })
     return await db.transaction(async (tx) => {
+      // Every structural edit (stages and custom fields) is locked content.
+      await assertResourceEditable({
+        workspaceId: input.workspaceId,
+        resourceKind: "pipeline",
+        resourceIds: [input.pipelineId],
+        changedKeys: ["stages", "fields"],
+        tx,
+      })
       await acquirePipelineAdvisoryLock(
         tx,
         this.structureLockKey(input.workspaceId, input.pipelineId),

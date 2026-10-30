@@ -43,7 +43,15 @@ import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { flowService } from "../flow/service"
 import { resolveFolderIdFilter } from "../lib/folder-filter"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import {
+  type TemplateLockKey,
+  withTemplateLockedTransaction,
+} from "../template/template-resource-locks"
 import { assertAutomationAccount } from "./account-scope"
 
 type ListFbCommentsInput = {
@@ -255,6 +263,17 @@ type UpdateTiktokCommentAutomationInput = Partial<
 }
 
 type FlowReplyLike = { type: string; value: string | null } | null | undefined
+
+/** The flows a write's replies point at: parents locked with the automation. */
+const replyFlowParents = (replies: {
+  privateReply?: FlowReplyLike
+  publicReply?: FlowReplyLike
+}): TemplateLockKey[] =>
+  [replies.privateReply, replies.publicReply].flatMap((reply) =>
+    reply?.type === "flow" && reply.value
+      ? [{ kind: "flow" as const, resourceId: reply.value }]
+      : [],
+  )
 
 class CommentAutomationService extends BaseService {
   private readonly threadsType = commentAutomationTypes.enum.threads
@@ -951,11 +970,14 @@ class CommentAutomationService extends BaseService {
     return record
   }
 
-  async findMessengerOrFail(input: {
-    workspaceId: string
-    id: string
-  }): Promise<CommentAutomationModel> {
-    const record = await db.query.commentAutomationModel.findFirst({
+  async findMessengerOrFail(
+    input: {
+      workspaceId: string
+      id: string
+    },
+    tx: DatabaseClient = db,
+  ): Promise<CommentAutomationModel> {
+    const record = await tx.query.commentAutomationModel.findFirst({
       where: {
         id: input.id,
         workspaceId: input.workspaceId,
@@ -1037,30 +1059,52 @@ class CommentAutomationService extends BaseService {
     ctx: { workspaceId: string; id: string },
     data: Partial<FbCommentAutomationWriteData>,
   ): Promise<CommentAutomationModel> {
-    const existing = await this.findMessengerOrFail(ctx)
-    await this.assertReplyFlowsExist(ctx.workspaceId, data)
-    await assertAutomationAccount({
-      workspaceId: ctx.workspaceId,
-      type: commentAutomationTypes.enum.messenger,
-      inboxId: data.inboxId,
-      currentInboxId: existing.inboxId,
-    })
+    // The automation and the flows its replies point at are locked before the
+    // stored row is read, so the diff that decides the guard is computed under
+    // the lock.
+    return await withTemplateLockedTransaction(
+      async (tx) => {
+        const existing = await this.findMessengerOrFail(ctx, tx)
+        await assertResourceEditable({
+          workspaceId: ctx.workspaceId,
+          resourceKind: "fbCommentAutomation",
+          resourceIds: [existing.id],
+          changedKeys: changedKeysOf(existing, data),
+          referencedParents: replyFlowParents(data),
+          tx,
+        })
+        await this.assertReplyFlowsExist(ctx.workspaceId, data, tx)
+        await assertAutomationAccount({
+          workspaceId: ctx.workspaceId,
+          type: commentAutomationTypes.enum.messenger,
+          inboxId: data.inboxId,
+          currentInboxId: existing.inboxId,
+          tx,
+        })
 
-    const [updated] = await db
-      .update(commentAutomationModel)
-      .set(this.withNormalizedReplies(data))
-      .where(
-        and(
-          eq(commentAutomationModel.id, ctx.id),
-          eq(commentAutomationModel.workspaceId, ctx.workspaceId),
-          eq(
-            commentAutomationModel.type,
-            commentAutomationTypes.enum.messenger,
-          ),
-        ),
-      )
-      .returning()
-    return updated
+        const [updated] = await tx
+          .update(commentAutomationModel)
+          .set(this.withNormalizedReplies(data))
+          .where(
+            and(
+              eq(commentAutomationModel.id, ctx.id),
+              eq(commentAutomationModel.workspaceId, ctx.workspaceId),
+              eq(
+                commentAutomationModel.type,
+                commentAutomationTypes.enum.messenger,
+              ),
+            ),
+          )
+          .returning()
+        return updated
+      },
+      {
+        initialKeys: [
+          { kind: "fbCommentAutomation", resourceId: ctx.id },
+          ...replyFlowParents(data),
+        ],
+      },
+    )
   }
 
   async deleteMessenger(input: {
@@ -1108,11 +1152,14 @@ class CommentAutomationService extends BaseService {
     return { data, pageCount }
   }
 
-  async findInstagramOrFail(input: {
-    workspaceId: string
-    id: string
-  }): Promise<CommentAutomationModel> {
-    const record = await db.query.commentAutomationModel.findFirst({
+  async findInstagramOrFail(
+    input: {
+      workspaceId: string
+      id: string
+    },
+    tx: DatabaseClient = db,
+  ): Promise<CommentAutomationModel> {
+    const record = await tx.query.commentAutomationModel.findFirst({
       where: {
         id: input.id,
         workspaceId: input.workspaceId,
@@ -1228,40 +1275,63 @@ class CommentAutomationService extends BaseService {
     ctx: { workspaceId: string; id: string },
     data: Partial<FbCommentAutomationWriteData>,
   ): Promise<CommentAutomationModel> {
-    const existing = await this.findInstagramOrFail(ctx)
-    await this.assertReplyFlowsExist(ctx.workspaceId, data)
-    await assertAutomationAccount({
-      workspaceId: ctx.workspaceId,
-      type: existing.type as IgCommentAutomationType,
-      inboxId: data.inboxId,
-      currentInboxId: existing.inboxId,
-    })
+    // The automation and the flows its replies point at are locked before the
+    // stored row is read, so the diff that decides the guard is computed under
+    // the lock.
+    return await withTemplateLockedTransaction(
+      async (tx) => {
+        const existing = await this.findInstagramOrFail(ctx, tx)
+        const type = existing.type as IgCommentAutomationType
+        await assertResourceEditable({
+          workspaceId: ctx.workspaceId,
+          resourceKind: "fbCommentAutomation",
+          resourceIds: [existing.id],
+          changedKeys: changedKeysOf(existing, data),
+          referencedParents: replyFlowParents(data),
+          tx,
+        })
+        await this.assertReplyFlowsExist(ctx.workspaceId, data, tx)
+        await assertAutomationAccount({
+          workspaceId: ctx.workspaceId,
+          type,
+          inboxId: data.inboxId,
+          currentInboxId: existing.inboxId,
+          tx,
+        })
 
-    const [updated] = await db
-      .update(commentAutomationModel)
-      .set(
-        this.withLiveCapabilities(
-          existing.type as IgCommentAutomationType,
-          this.withSupportedHideComments(
-            // `findInstagramOrFail` only matches `igCommentAutomationTypes`.
-            existing.type as IgCommentAutomationType,
-            this.withNormalizedReplies(data),
-          ),
-          existing,
-        ),
-      )
-      .where(
-        and(
-          eq(commentAutomationModel.id, ctx.id),
-          eq(commentAutomationModel.workspaceId, ctx.workspaceId),
-          inArray(
-            commentAutomationModel.type,
-            igCommentAutomationTypes.options,
-          ),
-        ),
-      )
-      .returning()
-    return updated
+        const [updated] = await tx
+          .update(commentAutomationModel)
+          .set(
+            this.withLiveCapabilities(
+              type,
+              this.withSupportedHideComments(
+                // `findInstagramOrFail` only matches `igCommentAutomationTypes`.
+                type,
+                this.withNormalizedReplies(data),
+              ),
+              existing,
+            ),
+          )
+          .where(
+            and(
+              eq(commentAutomationModel.id, ctx.id),
+              eq(commentAutomationModel.workspaceId, ctx.workspaceId),
+              inArray(
+                commentAutomationModel.type,
+                igCommentAutomationTypes.options,
+              ),
+            ),
+          )
+          .returning()
+        return updated
+      },
+      {
+        initialKeys: [
+          { kind: "fbCommentAutomation", resourceId: ctx.id },
+          ...replyFlowParents(data),
+        ],
+      },
+    )
   }
 
   async deleteInstagram(input: {
@@ -1324,6 +1394,7 @@ class CommentAutomationService extends BaseService {
   async findThreadsOrFail(props: {
     workspaceId: string
     id: string
+    tx?: DatabaseClient
   }): Promise<CommentAutomationModel> {
     const record = await this.getThreadsAutomation(props)
     if (!record) {
@@ -1378,8 +1449,36 @@ class CommentAutomationService extends BaseService {
     id: string
     data: UpdateThreadsCommentAutomationInput
     tx?: DatabaseClient
-  }) {
-    const { workspaceId, id, data, tx = db } = props
+  }): Promise<CommentAutomationModel> {
+    // A bare `db` would release the advisory lock at statement end, so a call
+    // without a caller transaction opens the locked one here.
+    if (!props.tx) {
+      // The automation and its reply flows are locked before the stored row is
+      // read, so the diff that decides the guard is computed under the lock.
+      return await withTemplateLockedTransaction(
+        (tx) => this.updateThreadsAutomation({ ...props, tx }),
+        {
+          initialKeys: [
+            { kind: "fbCommentAutomation", resourceId: props.id },
+            ...replyFlowParents({ publicReply: props.data.publicReply }),
+          ],
+        },
+      )
+    }
+    const { workspaceId, id, data, tx } = props
+    const existingThreads = await this.findThreadsOrFail({
+      workspaceId,
+      id,
+      tx,
+    })
+    await assertResourceEditable({
+      workspaceId,
+      resourceKind: "fbCommentAutomation",
+      resourceIds: [id],
+      changedKeys: changedKeysOf(existingThreads, data),
+      referencedParents: replyFlowParents({ publicReply: data.publicReply }),
+      tx,
+    })
     await this.assertReplyFlowsExist(
       workspaceId,
       { publicReply: data.publicReply },
@@ -1455,6 +1554,12 @@ class CommentAutomationService extends BaseService {
     tx?: DatabaseClient
   }) {
     const { workspaceId, id, tx = db } = props
+    await assertDeletable({
+      workspaceId,
+      resourceKind: "fbCommentAutomation",
+      resourceIds: [id],
+      tx,
+    })
     const [record] = await tx
       .delete(commentAutomationModel)
       .where(
@@ -1517,6 +1622,7 @@ class CommentAutomationService extends BaseService {
   async findTiktokOrFail(props: {
     workspaceId: string
     id: string
+    tx?: DatabaseClient
   }): Promise<CommentAutomationModel> {
     const record = await this.getTiktokAutomation(props)
     if (!record) {
@@ -1571,8 +1677,36 @@ class CommentAutomationService extends BaseService {
     id: string
     data: UpdateTiktokCommentAutomationInput
     tx?: DatabaseClient
-  }) {
-    const { workspaceId, id, data, tx = db } = props
+  }): Promise<CommentAutomationModel> {
+    // A bare `db` would release the advisory lock at statement end, so a call
+    // without a caller transaction opens the locked one here.
+    if (!props.tx) {
+      // The automation and its reply flows are locked before the stored row is
+      // read, so the diff that decides the guard is computed under the lock.
+      return await withTemplateLockedTransaction(
+        (tx) => this.updateTiktokAutomation({ ...props, tx }),
+        {
+          initialKeys: [
+            { kind: "fbCommentAutomation", resourceId: props.id },
+            ...replyFlowParents({ publicReply: props.data.publicReply }),
+          ],
+        },
+      )
+    }
+    const { workspaceId, id, data, tx } = props
+    const existingTiktok = await this.findTiktokOrFail({
+      workspaceId,
+      id,
+      tx,
+    })
+    await assertResourceEditable({
+      workspaceId,
+      resourceKind: "fbCommentAutomation",
+      resourceIds: [id],
+      changedKeys: changedKeysOf(existingTiktok, data),
+      referencedParents: replyFlowParents({ publicReply: data.publicReply }),
+      tx,
+    })
     await this.assertReplyFlowsExist(
       workspaceId,
       { publicReply: data.publicReply },
@@ -1651,6 +1785,12 @@ class CommentAutomationService extends BaseService {
     tx?: DatabaseClient
   }) {
     const { workspaceId, id, tx = db } = props
+    await assertDeletable({
+      workspaceId,
+      resourceKind: "fbCommentAutomation",
+      resourceIds: [id],
+      tx,
+    })
     const [record] = await tx
       .delete(commentAutomationModel)
       .where(

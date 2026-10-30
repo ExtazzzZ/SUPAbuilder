@@ -17,6 +17,12 @@ import { createId } from "@chatbotx.io/utils"
 import { isSameJsonValue } from "../audit/diff"
 import { BaseService } from "../base.service"
 import { validationException } from "../errors"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import type { PaginatedResult } from "../types"
 
 type FindByProps = {
@@ -115,27 +121,47 @@ class AiMcpServerService extends BaseService {
       throw validationException("name", "Name is already taken")
     }
 
-    const existing = await db.query.aiMCPServerModel.findFirst({
-      where: { id: ctx.id, workspaceId: ctx.workspaceId },
-    })
-    const previous = existing && {
-      name: existing.name,
-      url: existing.url,
-      auth: existing.auth,
-      availableTools: existing.availableTools,
-      selectedTools: existing.selectedTools,
-    }
-
-    const updated = await db
-      .update(aiMCPServerModel)
-      .set(data)
-      .where(
-        and(
-          eq(aiMCPServerModel.id, ctx.id),
-          eq(aiMCPServerModel.workspaceId, ctx.workspaceId),
-        ),
-      )
-      .returning()
+    // The server is locked before the stored row is read, so the diff that
+    // decides the guard (and the audit) is computed under the lock.
+    const { updated, previous } = await withTemplateLockedTransaction(
+      async (tx) => {
+        const existing = await tx.query.aiMCPServerModel.findFirst({
+          where: { id: ctx.id, workspaceId: ctx.workspaceId },
+        })
+        if (existing) {
+          // Credentials and the discovered tool list are the installer's; the
+          // name, the address and which tools are on are the template's.
+          await assertResourceEditable({
+            workspaceId: ctx.workspaceId,
+            resourceKind: "aiMcpServer",
+            resourceIds: [ctx.id],
+            changedKeys: changedKeysOf(existing, data),
+            tx,
+          })
+        }
+        const rows = await tx
+          .update(aiMCPServerModel)
+          .set(data)
+          .where(
+            and(
+              eq(aiMCPServerModel.id, ctx.id),
+              eq(aiMCPServerModel.workspaceId, ctx.workspaceId),
+            ),
+          )
+          .returning()
+        return {
+          updated: rows,
+          previous: existing && {
+            name: existing.name,
+            url: existing.url,
+            auth: existing.auth,
+            availableTools: existing.availableTools,
+            selectedTools: existing.selectedTools,
+          },
+        }
+      },
+      { initialKeys: [{ kind: "aiMcpServer", resourceId: ctx.id }] },
+    )
 
     if (updated.length > 0 && !isSameJsonValue(data, previous)) {
       await this.audit("update", `updated an MCP Server (#${ctx.id})`)
@@ -145,6 +171,11 @@ class AiMcpServerService extends BaseService {
   }
 
   async delete(ctx: { workspaceId: string; id: string }) {
+    await assertDeletable({
+      workspaceId: ctx.workspaceId,
+      resourceKind: "aiMcpServer",
+      resourceIds: [ctx.id],
+    })
     const deleted = await db
       .delete(aiMCPServerModel)
       .where(

@@ -19,6 +19,12 @@ import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { flowService } from "../flow/service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 
 const QR_CODES_CACHE_TTL_SECONDS = 60 * 60
 
@@ -100,8 +106,11 @@ class QRCodeService extends BaseService {
   // destination for up to `QR_CODES_CACHE_TTL_SECONDS`. The authenticated
   // builder edit page gets its own cache in `findQrCode`
   // (apps/builder/src/features/qr-codes/queries/index.ts) instead.
-  async find({ workspaceId, id }: { workspaceId: string; id: string }) {
-    return await db.query.reflinkModel.findFirst({
+  async find(
+    { workspaceId, id }: { workspaceId: string; id: string },
+    tx: DatabaseClient = db,
+  ) {
+    return await tx.query.reflinkModel.findFirst({
       where: {
         id,
         workspaceId,
@@ -110,8 +119,11 @@ class QRCodeService extends BaseService {
     })
   }
 
-  async findOrFail({ workspaceId, id }: { workspaceId: string; id: string }) {
-    const qrCode = await this.find({ workspaceId, id })
+  async findOrFail(
+    { workspaceId, id }: { workspaceId: string; id: string },
+    tx: DatabaseClient = db,
+  ) {
+    const qrCode = await this.find({ workspaceId, id }, tx)
     if (!qrCode) {
       throw notFoundException("QR Code not found")
     }
@@ -163,13 +175,59 @@ class QRCodeService extends BaseService {
     duplicateNameMessage: string
     tx?: DatabaseClient
   }): Promise<ReflinkModel> {
-    const { tx = db, workspaceId, id, data, duplicateNameMessage } = input
-    const qrCode = await this.findOrFail({ workspaceId, id })
+    const { tx } = input
+    // Without a caller transaction, open a locked one of our own so an install
+    // sync cannot interleave between the guard and the write. The code and the
+    // flow it is re-pointed at are locked BEFORE the stored row is read, so
+    // the diff that decides the guard is computed under the lock.
+    const updated = tx
+      ? await this.applyUpdate(tx, input)
+      : await withTemplateLockedTransaction(
+          (lockedTx) => this.applyUpdate(lockedTx, input),
+          {
+            initialKeys: [
+              { kind: "reflink", resourceId: input.id },
+              ...(input.data.flowId
+                ? [{ kind: "flow" as const, resourceId: input.data.flowId }]
+                : []),
+            ],
+          },
+        )
+    // After the write commits: invalidating inside the transaction would let a
+    // concurrent read re-cache the list without it.
+    await this.invalidateCacheTags(qrCodeWorkspaceCacheTag(input.workspaceId))
+    return updated
+  }
+
+  private async applyUpdate(
+    tx: DatabaseClient,
+    input: {
+      workspaceId: string
+      id: string
+      data: UpdateQrCodeData
+      duplicateNameMessage: string
+    },
+  ): Promise<ReflinkModel> {
+    const { workspaceId, id, data, duplicateNameMessage } = input
+    const qrCode = await this.findOrFail({ workspaceId, id }, tx)
     const { size, name, ...rest } = data
     const qrStyles =
       size === undefined
         ? undefined
         : { ...((qrCode.qrStyles as { size: number } | null) ?? {}), size }
+    await assertResourceEditable({
+      workspaceId,
+      resourceKind: "reflink",
+      resourceIds: [id],
+      // The QR size is stored in `qrStyles`, a locked content field. Compare
+      // against the stored row: an unchanged full-form save is allowed.
+      changedKeys: changedKeysOf(qrCode, {
+        ...rest,
+        ...(name === undefined ? {} : { name: `qr_${name}` }),
+        ...(qrStyles === undefined ? {} : { qrStyles }),
+      }),
+      tx,
+    })
 
     if (
       rest.flowId &&
@@ -195,8 +253,6 @@ class QRCodeService extends BaseService {
         )
         .returning()
 
-      await this.invalidateCacheTags(qrCodeWorkspaceCacheTag(workspaceId))
-
       return updated
     } catch (error) {
       if (isUniqueViolationError(error)) {
@@ -212,6 +268,12 @@ class QRCodeService extends BaseService {
     tx?: DatabaseClient
   }): Promise<void> {
     const { tx = db, workspaceId, ids } = input
+    await assertDeletable({
+      workspaceId,
+      resourceKind: "reflink",
+      resourceIds: ids,
+      tx,
+    })
     await tx
       .delete(reflinkModel)
       .where(

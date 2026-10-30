@@ -18,6 +18,8 @@ import { notFoundException } from "../errors"
 import { logger } from "../logger"
 import { messengerWelcomeMessageFlowService } from "../messenger-welcome-message-flow/service"
 import { smartDelayService } from "../smart-delay/service"
+import { assertResourceEditable } from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import { assertFlowGraphPublishable } from "./assert-publishable"
 
 class FlowVersionService extends BaseService {
@@ -164,7 +166,14 @@ class FlowVersionService extends BaseService {
   async restore({ version }: { version: FlowVersionModel }): Promise<void> {
     assertFlowGraphPublishable({ nodes: version.nodes, edges: version.edges })
 
-    await db.transaction(async (tx) => {
+    await withTemplateLockedTransaction(async (tx) => {
+      await assertResourceEditable({
+        workspaceId: version.workspaceId,
+        resourceKind: "flow",
+        resourceIds: [version.flowId],
+        changedKeys: ["nodes", "edges"],
+        tx,
+      })
       await tx
         .update(flowVersionModel)
         .set({ isLatest: false })
@@ -219,38 +228,47 @@ class FlowVersionService extends BaseService {
     flowId: string
     workspaceId: string
   }): Promise<Pick<FlowVersionModel, "nodes" | "edges">> {
-    const publishedVersion = await db.query.flowVersionModel.findFirst({
-      where: {
-        flowId,
+    return await withTemplateLockedTransaction(async (tx) => {
+      await assertResourceEditable({
         workspaceId,
-        isDraft: false,
-        isLatest: true,
-      },
-    })
+        resourceKind: "flow",
+        resourceIds: [flowId],
+        changedKeys: ["nodes", "edges"],
+        tx,
+      })
+      const publishedVersion = await tx.query.flowVersionModel.findFirst({
+        where: {
+          flowId,
+          workspaceId,
+          isDraft: false,
+          isLatest: true,
+        },
+      })
 
-    if (!publishedVersion) {
-      throw notFoundException("Flow version not found")
-    }
+      if (!publishedVersion) {
+        throw notFoundException("Flow version not found")
+      }
 
-    await db
-      .update(flowVersionModel)
-      .set({
+      await tx
+        .update(flowVersionModel)
+        .set({
+          nodes: publishedVersion.nodes,
+          edges: publishedVersion.edges,
+          startNodeId: publishedVersion.startNodeId,
+        })
+        .where(
+          and(
+            eq(flowVersionModel.flowId, flowId),
+            eq(flowVersionModel.workspaceId, workspaceId),
+            eq(flowVersionModel.isDraft, true),
+          ),
+        )
+
+      return {
         nodes: publishedVersion.nodes,
         edges: publishedVersion.edges,
-        startNodeId: publishedVersion.startNodeId,
-      })
-      .where(
-        and(
-          eq(flowVersionModel.flowId, flowId),
-          eq(flowVersionModel.workspaceId, workspaceId),
-          eq(flowVersionModel.isDraft, true),
-        ),
-      )
-
-    return {
-      nodes: publishedVersion.nodes,
-      edges: publishedVersion.edges,
-    }
+      }
+    })
   }
 
   /**
@@ -368,13 +386,24 @@ class FlowVersionService extends BaseService {
       throw notFoundException("Draft flow version not found")
     }
 
-    await db
-      .update(flowVersionModel)
-      .set({
-        nodes,
-        edges: input.edges,
+    // The lock is the first step of the write transaction (the read above
+    // only resolves the immutable flow id), so a racing sync waits for it.
+    await withTemplateLockedTransaction(async (tx) => {
+      await assertResourceEditable({
+        workspaceId: input.workspaceId,
+        resourceKind: "flow",
+        resourceIds: [flowVersion.flowId],
+        changedKeys: ["nodes", "edges"],
+        tx,
       })
-      .where(eq(flowVersionModel.id, flowVersion.id))
+      await tx
+        .update(flowVersionModel)
+        .set({
+          nodes,
+          edges: input.edges,
+        })
+        .where(eq(flowVersionModel.id, flowVersion.id))
+    })
   }
 
   /**
@@ -398,13 +427,22 @@ class FlowVersionService extends BaseService {
       throw notFoundException("Draft flow version not found")
     }
 
-    await db
-      .update(flowVersionModel)
-      .set({
-        nodes,
-        edges: input.edges,
+    await withTemplateLockedTransaction(async (tx) => {
+      await assertResourceEditable({
+        workspaceId: input.workspaceId,
+        resourceKind: "flow",
+        resourceIds: [input.flowId],
+        changedKeys: ["nodes", "edges"],
+        tx,
       })
-      .where(eq(flowVersionModel.id, draftVersion.id))
+      await tx
+        .update(flowVersionModel)
+        .set({
+          nodes,
+          edges: input.edges,
+        })
+        .where(eq(flowVersionModel.id, draftVersion.id))
+    })
   }
 
   async invalidateList(flowId: string): Promise<void> {
@@ -425,6 +463,49 @@ class FlowVersionService extends BaseService {
     const { versionId, workspaceId, tx = db } = props
     return await tx.query.flowVersionModel.findFirst({
       where: { id: versionId, workspaceId },
+    })
+  }
+
+  /**
+   * What follows a new published version, wherever it came from (a manual
+   * publish or a template sync): drop the cached version list, mirror the
+   * start node to Meta welcome flows, and release quick-reply state pinned to
+   * the previous version. Never throws.
+   */
+  async afterPublish(input: {
+    workspaceId: string
+    flowId: string
+    versionId: string
+  }): Promise<void> {
+    const { workspaceId, flowId, versionId } = input
+    await this.invalidateCacheTags(`flows:${flowId}:versions`)
+
+    // Fire-and-forget, never throws: mirrors the start node to Meta welcome
+    // message flows (Click-to-Messenger ads) on every Messenger page.
+    await messengerWelcomeMessageFlowService.enqueueSync({
+      workspaceId,
+      flowId,
+      reason: "publish",
+    })
+
+    // Fire-and-forget: publishing must never fail or wait on cleanup;
+    // stale state also resolves itself at the worker.
+    Promise.all([
+      smartDelayService.cancelQuickReplyFollowUpsForStaleVersion({
+        workspaceId,
+        flowId,
+        currentFlowVersionId: versionId,
+      }),
+      conversationService.clearQuickReplyChallengesForStaleVersion({
+        workspaceId,
+        flowId,
+        currentFlowVersionId: versionId,
+      }),
+    ]).catch((error) => {
+      logger.warn(
+        { err: error, flowId },
+        "publish: failed to clear pending quick reply state",
+      )
     })
   }
 
@@ -469,7 +550,14 @@ class FlowVersionService extends BaseService {
     const draftVersion = flow.flowVersions[0]
 
     const newVersionId = createId()
-    await db.transaction(async (tx) => {
+    await withTemplateLockedTransaction(async (tx) => {
+      await assertResourceEditable({
+        workspaceId: input.workspaceId,
+        resourceKind: "flow",
+        resourceIds: [input.flowId],
+        changedKeys: ["nodes", "edges"],
+        tx,
+      })
       // Remove all other latest versions
       await tx
         .update(flowVersionModel)
@@ -510,34 +598,10 @@ class FlowVersionService extends BaseService {
         .where(eq(flowModel.id, flow.id))
     })
 
-    await this.invalidateCacheTags(`flows:${flow.id}:versions`)
-
-    // Fire-and-forget, never throws: mirrors the start node to Meta welcome
-    // message flows (Click-to-Messenger ads) on every Messenger page.
-    await messengerWelcomeMessageFlowService.enqueueSync({
+    await this.afterPublish({
       workspaceId: input.workspaceId,
       flowId: flow.id,
-      reason: "publish",
-    })
-
-    // Fire-and-forget: publishing must never fail or wait on cleanup;
-    // stale state also resolves itself at the worker.
-    Promise.all([
-      smartDelayService.cancelQuickReplyFollowUpsForStaleVersion({
-        workspaceId: input.workspaceId,
-        flowId: flow.id,
-        currentFlowVersionId: newVersionId,
-      }),
-      conversationService.clearQuickReplyChallengesForStaleVersion({
-        workspaceId: input.workspaceId,
-        flowId: flow.id,
-        currentFlowVersionId: newVersionId,
-      }),
-    ]).catch((error) => {
-      logger.warn(
-        { err: error, flowId: flow.id },
-        "publish: failed to clear pending quick reply state",
-      )
+      versionId: newVersionId,
     })
 
     await this.audit("publish", `published a flow (#${flow.id})`)

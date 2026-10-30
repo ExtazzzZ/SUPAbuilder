@@ -1,5 +1,6 @@
 import type { DatabaseClient } from "@chatbotx.io/database/client"
 import { isUniqueViolationError } from "@chatbotx.io/database/client"
+import { type CopyNameStyle, insertWithFreeCopyName } from "../../lib/copy-name"
 
 const MAX_RETRY_ATTEMPTS = 20
 
@@ -50,4 +51,48 @@ export const insertWithNameRetry = async <T>(
     }
   }
   return
+}
+
+/**
+ * Installs under the source's own name when it is free and otherwise under the
+ * shared copy-name scheme (`<name> - Copy`, `<name> - Copy 2`, ...), the one
+ * the rest of the product uses for duplicates. The unique index stays the
+ * arbiter: each attempt runs in its own savepoint and only that constraint's
+ * violation moves on, and the existing names are read once, only after the
+ * plain name was refused. `onGiveUp` runs when every candidate is taken.
+ */
+export const insertWithCopyName = async <T>(input: {
+  tx: DatabaseClient
+  constraint: string
+  name: string
+  maxLength?: number
+  style?: CopyNameStyle
+  loadTakenNames: (tx: DatabaseClient) => Promise<readonly string[]>
+  insert: (tx: DatabaseClient, name: string) => Promise<T>
+  onGiveUp: (name: string) => void
+}): Promise<T | undefined> => {
+  const attempt = (name: string) =>
+    input.tx.transaction((savepointTx) => input.insert(savepointTx, name))
+  try {
+    return await attempt(input.name)
+  } catch (error) {
+    if (!isUniqueViolationError(error, input.constraint)) {
+      throw error
+    }
+  }
+  const taken = new Set(await input.loadTakenNames(input.tx))
+  const created = await insertWithFreeCopyName({
+    base: input.name,
+    taken,
+    options: {
+      style: input.style ?? "dash",
+      maxLength: input.maxLength ?? 255,
+    },
+    constraint: input.constraint,
+    insert: attempt,
+  })
+  if (created === undefined) {
+    input.onGiveUp(input.name)
+  }
+  return created
 }

@@ -1,7 +1,7 @@
 "use client"
 
+import type { TemplateDetail } from "@chatbotx.io/business"
 import type { TemplateCategory } from "@chatbotx.io/database/partials"
-import type { TemplateModel } from "@chatbotx.io/database/types"
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { SwitchField } from "@chatbotx.io/ui/components/form/switch-field"
 import { TextareaField } from "@chatbotx.io/ui/components/form/textarea-field"
@@ -34,10 +34,16 @@ import { TemplateShareCard } from "./template-share-card"
 
 type TemplateFormProps = {
   workspaceId: string
-  template?: TemplateModel
+  template?: TemplateDetail
+  /** Categories the member may include in a template. */
+  selectableCategories: readonly TemplateCategory[]
 }
 
-export function TemplateForm({ workspaceId, template }: TemplateFormProps) {
+export function TemplateForm({
+  workspaceId,
+  template,
+  selectableCategories,
+}: TemplateFormProps) {
   const t = useTranslations()
   const router = useRouter()
   const isEdit = Boolean(template)
@@ -150,6 +156,7 @@ export function TemplateForm({ workspaceId, template }: TemplateFormProps) {
         </Card>
 
         <TemplateContentsCard
+          categories={selectableCategories}
           onChange={handleSelectionChange}
           selection={selection}
           workspaceId={workspaceId}

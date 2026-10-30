@@ -162,6 +162,7 @@ describe("runFlowImport", () => {
           edges: input.edges,
           createdCustomFieldIds: [],
           createdBotFieldIds: [],
+          renamedCustomFields: [],
         }),
     )
   })
@@ -332,6 +333,7 @@ describe("runFlowImport", () => {
       edges: [],
       createdCustomFieldIds: ["field-1"],
       createdBotFieldIds: [],
+      renamedCustomFields: [],
     })
     mockStream(buildExportJson())
 
@@ -356,6 +358,7 @@ describe("runFlowImport", () => {
       edges: [],
       createdCustomFieldIds: [],
       createdBotFieldIds: ["bot-field-1"],
+      renamedCustomFields: [],
     })
     mockStream(buildExportJson())
 
@@ -438,6 +441,7 @@ describe("runFlowImport", () => {
       edges: [],
       createdCustomFieldIds: [],
       createdBotFieldIds: [],
+      renamedCustomFields: [],
     })
 
     await runFlowImport(importRow)
@@ -580,6 +584,7 @@ describe("runFlowImport", () => {
       edges: [],
       createdCustomFieldIds: [],
       createdBotFieldIds: ["77"],
+      renamedCustomFields: [],
     })
 
     await runFlowImport(importRow)
@@ -649,6 +654,22 @@ describe("runFlowImport", () => {
     expect(finalUpdate?.errorMessage).toEqual(
       expect.stringContaining("unresolved reference"),
     )
+  })
+
+  test("reports a renamed custom field in the import's sample and warning", async () => {
+    mocks.importFlowExport.mockResolvedValueOnce({
+      flowId: "new-flow-id",
+      createdCustomFieldIds: ["cf-9"],
+      createdBotFieldIds: [],
+      renamedCustomFields: [{ from: "size", to: "size_1", type: "number" }],
+    })
+    mockStream(buildExportJson())
+
+    await runFlowImport(importRow)
+
+    const finalUpdate = mocks.updateValues.at(-1)
+    expect(finalUpdate?.errorSample[0]?.reason).toContain('"size_1"')
+    expect(finalUpdate?.errorMessage).toContain("1 renamed custom field")
   })
 
   test("an export with no botFields key (produced before the manifest existed) still imports cleanly", async () => {

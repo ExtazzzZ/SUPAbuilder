@@ -12,7 +12,12 @@ import {
 } from "@chatbotx.io/utils/inbox-image-support"
 import { notFoundException, validationException } from "../errors"
 import { resolveTenantSettings } from "../platform/settings"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import { getPublicFileUrl } from "../utils"
 
 type SavedReplyModel = typeof savedReplyModel.$inferSelect
@@ -106,44 +111,83 @@ class SavedReplyService {
     ctx: { workspaceId: string; id: string },
     data: SavedReplyUpdate,
   ): Promise<SavedReplyWithImages> {
-    const savedReply = await findOrFail({
-      table: savedReplyModel,
-      where: { id: ctx.id, workspaceId: ctx.workspaceId },
-      message: "Saved reply not found",
-    })
-
-    const text = data.text === undefined ? savedReply.text : data.text.trim()
-    const imageCount = data.imageFileIds
-      ? data.imageFileIds.length
-      : await savedReplyImageRepository.countBySavedReplyId({
-          workspaceId: ctx.workspaceId,
-          savedReplyId: savedReply.id,
-        })
-    assertTextOrImages(text, imageCount)
-    if (data.imageFileIds) {
-      await this.assertImageFiles(ctx.workspaceId, data.imageFileIds)
+    const { imageFileIds, ...scalarData } = data
+    // Validates the submitted images only (no stored state), so it can stay
+    // outside the lock.
+    if (imageFileIds) {
+      await this.assertImageFiles(ctx.workspaceId, imageFileIds)
     }
 
-    const updatedSavedReply = await db.transaction(async (tx) => {
-      const [updated] = await tx
-        .update(savedReplyModel)
-        .set({ shortcut: data.shortcut, text })
-        .where(eq(savedReplyModel.id, savedReply.id))
-        .returning()
+    // The saved reply is locked before its stored row and images are read, so
+    // the diff that decides the guard is computed under the lock.
+    const updatedSavedReply = await withTemplateLockedTransaction(
+      async (tx) => {
+        const savedReply = await findOrFail({
+          client: tx,
+          table: savedReplyModel,
+          where: { id: ctx.id, workspaceId: ctx.workspaceId },
+          message: "Saved reply not found",
+        })
+        const currentImageIds = imageFileIds
+          ? (
+              await savedReplyImageRepository.listBySavedReplyIds(
+                {
+                  workspaceId: ctx.workspaceId,
+                  savedReplyIds: [savedReply.id],
+                },
+                tx,
+              )
+            )
+              .sort((a, b) => a.position - b.position)
+              .map((image) => image.mediaLibraryFileId)
+          : []
+        const changedKeys = [
+          ...changedKeysOf(savedReply, scalarData),
+          ...(imageFileIds &&
+          JSON.stringify(imageFileIds) !== JSON.stringify(currentImageIds)
+            ? ["images"]
+            : []),
+        ]
 
-      if (data.imageFileIds) {
-        await savedReplyImageRepository.replaceForSavedReply(
-          {
-            workspaceId: ctx.workspaceId,
-            savedReplyId: savedReply.id,
-            mediaLibraryFileIds: data.imageFileIds,
-          },
+        const text =
+          data.text === undefined ? savedReply.text : data.text.trim()
+        const imageCount = imageFileIds
+          ? imageFileIds.length
+          : await savedReplyImageRepository.countBySavedReplyId(
+              { workspaceId: ctx.workspaceId, savedReplyId: savedReply.id },
+              tx,
+            )
+        assertTextOrImages(text, imageCount)
+
+        // Compared with the stored row, so an unchanged full-form save is allowed.
+        await assertResourceEditable({
+          workspaceId: ctx.workspaceId,
+          resourceKind: "savedReply",
+          resourceIds: [savedReply.id],
+          changedKeys,
           tx,
-        )
-      }
+        })
+        const [updated] = await tx
+          .update(savedReplyModel)
+          .set({ shortcut: data.shortcut, text })
+          .where(eq(savedReplyModel.id, savedReply.id))
+          .returning()
 
-      return updated
-    })
+        if (imageFileIds) {
+          await savedReplyImageRepository.replaceForSavedReply(
+            {
+              workspaceId: ctx.workspaceId,
+              savedReplyId: savedReply.id,
+              mediaLibraryFileIds: imageFileIds,
+            },
+            tx,
+          )
+        }
+
+        return updated
+      },
+      { initialKeys: [{ kind: "savedReply", resourceId: ctx.id }] },
+    )
 
     const [withImages] = await this.attachImages(ctx.workspaceId, [
       updatedSavedReply,

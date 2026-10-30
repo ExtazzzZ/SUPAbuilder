@@ -27,7 +27,15 @@ import { inboxTeamService } from "../enterprise/inbox-team/service"
 import { notFoundException, validationException } from "../errors"
 import { flowService } from "../flow/service"
 import { tagService } from "../tag/service"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import {
+  type TemplateLockKey,
+  withTemplateLockedTransaction,
+} from "../template/template-resource-locks"
 import type { PaginatedResult } from "../types"
 import { isWorkspaceAdminMember } from "../workspace-member/predicates"
 import { workspaceMemberService } from "../workspace-member/service"
@@ -52,6 +60,27 @@ function isSameStringSet(a?: string[] | null, b?: string[] | null): boolean {
     left.every((value, index) => value === right[index])
   )
 }
+
+/** The flows, tags and custom fields an action-rule write points at: parents locked with the agent. */
+const actionRuleParents = (
+  actionRules: readonly AIAgentActionRule[] | undefined,
+): TemplateLockKey[] =>
+  (actionRules ?? [])
+    .flatMap((rule) => rule.actions)
+    .flatMap((action): TemplateLockKey[] => {
+      switch (action.type) {
+        case "send_flow":
+          return [{ kind: "flow", resourceId: action.flowId }]
+        case "add_tag":
+        case "remove_tag":
+          return [{ kind: "tag", resourceId: action.tagId }]
+        case "set_custom_field":
+        case "clear_custom_field":
+          return [{ kind: "customField", resourceId: action.customFieldId }]
+        default:
+          return []
+      }
+    })
 
 type AIAgentChangeGroup = "model" | "instructions" | "knowledge base"
 
@@ -427,17 +456,19 @@ class AiAgentService extends BaseService {
     ctx: { workspaceId: string; id: string },
     data: UpdateAIAgentRequest,
   ): Promise<AIAgentModel> {
-    const aiAgent = await this.findBy({
+    // The early read only answers "does it exist" and "is there anything to
+    // do"; the row that is diffed and audited is read again under the lock.
+    const early = await this.findBy({
       where: { id: ctx.id, workspaceId: ctx.workspaceId },
     })
 
-    if (!aiAgent) {
+    if (!early) {
       throw notFoundException("AI agent not found")
     }
 
     const hasChanges = Object.values(data).some((value) => value !== undefined)
     if (!hasChanges) {
-      return aiAgent
+      return early
     }
 
     const actionRules =
@@ -445,31 +476,57 @@ class AiAgentService extends BaseService {
         ? undefined
         : await this.validateActionRules(ctx.workspaceId, data.actionRules)
 
-    await db.transaction(async (tx) => {
-      if (data.isDefault) {
+    // The agent and the flow/tag/field its action rules reference are locked
+    // before the stored row is read, so the diff that decides the guard is
+    // computed under the lock.
+    const aiAgent = await withTemplateLockedTransaction(
+      async (tx) => {
+        const current = await tx.query.aiAgentModel.findFirst({
+          where: { id: ctx.id, workspaceId: ctx.workspaceId },
+        })
+        if (!current) {
+          throw notFoundException("AI agent not found")
+        }
+        await assertResourceEditable({
+          workspaceId: ctx.workspaceId,
+          resourceKind: "aiAgent",
+          resourceIds: [current.id],
+          changedKeys: changedKeysOf(current, data),
+          referencedParents: actionRuleParents(actionRules),
+          tx,
+        })
+        if (data.isDefault) {
+          await tx
+            .update(aiAgentModel)
+            .set({ isDefault: false })
+            .where(eq(aiAgentModel.workspaceId, ctx.workspaceId))
+        }
+        const {
+          webSearchAuthorizedDomains,
+          actionRules: _actionRules,
+          ...rest
+        } = data
         await tx
           .update(aiAgentModel)
-          .set({ isDefault: false })
-          .where(eq(aiAgentModel.workspaceId, ctx.workspaceId))
-      }
-      const {
-        webSearchAuthorizedDomains,
-        actionRules: _actionRules,
-        ...rest
-      } = data
-      await tx
-        .update(aiAgentModel)
-        .set({
-          ...rest,
-          ...(actionRules !== undefined && { actionRules }),
-          ...(webSearchAuthorizedDomains !== undefined && {
-            webSearchAuthorizedDomains: normalizeWebSearchDomains(
-              webSearchAuthorizedDomains,
-            ),
-          }),
-        })
-        .where(eq(aiAgentModel.id, aiAgent.id))
-    })
+          .set({
+            ...rest,
+            ...(actionRules !== undefined && { actionRules }),
+            ...(webSearchAuthorizedDomains !== undefined && {
+              webSearchAuthorizedDomains: normalizeWebSearchDomains(
+                webSearchAuthorizedDomains,
+              ),
+            }),
+          })
+          .where(eq(aiAgentModel.id, current.id))
+        return current
+      },
+      {
+        initialKeys: [
+          { kind: "aiAgent", resourceId: ctx.id },
+          ...actionRuleParents(actionRules),
+        ],
+      },
+    )
 
     await this.invalidateCacheTags(this.getWorkspaceCacheTag(ctx.workspaceId))
 

@@ -5,15 +5,28 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 const {
   mockCreateFromImport,
   mockFlowModelFindMany,
-  mockFindPublished,
   mockFindDraft,
+  mockFindPreferred,
+  mockFindExistingIds,
 } = vi.hoisted(() => ({
+  mockFindExistingIds: vi.fn(),
   mockCreateFromImport: vi.fn(),
   mockFlowModelFindMany: vi.fn(),
-  mockFindPublished: vi.fn(),
   mockFindDraft: vi.fn(),
+  mockFindPreferred: vi.fn(),
 }))
 
+// The fixtures below are partial nodes; structural validation has its own test.
+vi.mock("@chatbotx.io/flow-config", async (importOriginal) => {
+  const { z } = await import("zod")
+  return {
+    ...(await importOriginal<typeof import("@chatbotx.io/flow-config")>()),
+    flowVersionSchema: z.unknown(),
+  }
+})
+vi.mock("../src/decision/profile-service", () => ({
+  decisionProfileService: { assertFlowReferencesPublishable: vi.fn() },
+}))
 vi.mock("@chatbotx.io/database/client", () => ({
   db: { query: { flowModel: { findMany: mockFlowModelFindMany } } },
   eq: vi.fn(),
@@ -32,10 +45,13 @@ vi.mock("../src/flow", () => ({
 }))
 
 vi.mock("../src/flow-version", () => ({
-  flowVersionService: {
-    findPublished: mockFindPublished,
-    findDraft: mockFindDraft,
-  },
+  flowVersionService: { findDraft: mockFindDraft },
+}))
+
+vi.mock("@chatbotx.io/database/repositories", () => ({
+  flowVersionRepository: { findPreferredByFlowIds: mockFindPreferred },
+  referenceExistenceRepository: { findExistingIds: mockFindExistingIds },
+  isVerifiableReferenceKind: (kind: string) => kind === "inbox",
 }))
 
 const { flowsAdapter } = await import("../src/template/adapters/flows")
@@ -101,7 +117,7 @@ describe("flowsAdapter", () => {
     )
   })
 
-  test("insert leaves an unmapped bot_field token untouched and warns", async () => {
+  test("insert drops a step whose required bot field is unmapped (never leaves a foreign id) and warns", async () => {
     mockCreateFromImport.mockResolvedValue("new-flow-id")
     const ctx = buildContext()
 
@@ -120,14 +136,156 @@ describe("flowsAdapter", () => {
 
     expect(mockCreateFromImport).toHaveBeenCalledWith(
       expect.objectContaining({
-        nodes: [buildFlowNode("bot_field:999")],
+        nodes: [{ id: "1", data: { details: { steps: [] } } }],
       }),
+    )
+    expect(ctx.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ entityKind: "referenceRemoved" }),
     )
     expect(ctx.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         entityKind: "botField",
         value: "999",
       }),
+    )
+  })
+
+  test("insert installs a published, fully resolved flow as draft plus published version", async () => {
+    mockCreateFromImport.mockResolvedValue("new-flow-id")
+    const ctx = buildContext()
+    await flowsAdapter.insert(ctx, [
+      {
+        sourceId: "src-flow",
+        name: "Live",
+        active: true,
+        published: true,
+        enableInInbox: true,
+        startNodeId: "1",
+        nodes: [],
+        edges: [],
+        folderId: null,
+      },
+    ])
+    const call = mockCreateFromImport.mock.calls[0]?.[0] as {
+      active: boolean
+      publishedToo: boolean
+    }
+    expect(call.publishedToo).toBe(true)
+    expect(call.active).toBe(true)
+    expect(ctx.warn).not.toHaveBeenCalled()
+  })
+
+  test("insert keeps a never-published flow as an inactive draft without a warning", async () => {
+    mockCreateFromImport.mockResolvedValue("new-flow-id")
+    const ctx = buildContext()
+    await flowsAdapter.insert(ctx, [
+      {
+        sourceId: "src-flow",
+        name: "Draft",
+        active: true,
+        enableInInbox: true,
+        startNodeId: "1",
+        nodes: [],
+        edges: [],
+        folderId: null,
+      },
+    ])
+    expect(mockCreateFromImport).toHaveBeenCalledWith(
+      expect.objectContaining({ active: false, publishedToo: false }),
+    )
+    expect(ctx.warn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ entityKind: "flowNotPublished" }),
+    )
+  })
+
+  const tagStepFlow = (tagIds: string[]) => ({
+    sourceId: "src-flow",
+    name: "Tagger",
+    active: true,
+    enableInInbox: true,
+    startNodeId: "1",
+    nodes: [
+      {
+        id: "1",
+        data: {
+          details: { steps: [{ id: "s1", stepType: "addContactTag", tagIds }] },
+        },
+      },
+    ],
+    edges: [],
+    folderId: null,
+  })
+
+  test("insert drops an unresolved tag id from the array and keeps the resolved one", async () => {
+    mockCreateFromImport.mockResolvedValue("new-flow-id")
+    const ctx = buildContext({ tag: new Map([["1", "91"]]) })
+
+    await flowsAdapter.insert(ctx, [tagStepFlow(["1", "2"])])
+
+    const { nodes } = mockCreateFromImport.mock.calls[0]?.[0] as {
+      nodes: { data: { details: { steps: { tagIds: string[] }[] } } }[]
+    }
+    expect(nodes[0]?.data.details.steps[0]?.tagIds).toEqual(["91"])
+  })
+
+  test("insert keeps a verifyInTarget id that exists in the target and removes one that does not", async () => {
+    mockCreateFromImport.mockResolvedValue("new-flow-id")
+    mockFindExistingIds.mockResolvedValue(new Set(["500"]))
+    const ctx = buildContext()
+    const entry = {
+      ...tagStepFlow([]),
+      nodes: [
+        {
+          id: "1",
+          data: {
+            details: {
+              steps: [
+                { id: "a", stepType: "sendWaTemplateMessage", inboxId: "500" },
+                { id: "b", stepType: "sendWaTemplateMessage", inboxId: "600" },
+              ],
+            },
+          },
+        },
+      ],
+    }
+
+    await flowsAdapter.insert(ctx, [entry])
+
+    const { nodes } = mockCreateFromImport.mock.calls[0]?.[0] as {
+      nodes: { data: { details: { steps: { inboxId: string | null }[] } } }[]
+    }
+    expect(nodes[0]?.data.details.steps.map((step) => step.inboxId)).toEqual([
+      "500",
+      null,
+    ])
+    expect(mockFindExistingIds).toHaveBeenCalledTimes(1)
+  })
+
+  test("insert registers an identity flowNode map for every installed node", async () => {
+    mockCreateFromImport.mockResolvedValue("new-flow-id")
+    const ctx = buildContext()
+
+    await flowsAdapter.insert(ctx, [
+      {
+        sourceId: "src-flow",
+        name: "Onboarding",
+        active: true,
+        enableInInbox: true,
+        startNodeId: "1",
+        nodes: [
+          buildFlowNode("bot_field:7"),
+          { ...buildFlowNode("x"), id: "2" },
+        ],
+        edges: [],
+        folderId: null,
+      },
+    ])
+
+    expect(ctx.idMaps.flowNode).toEqual(
+      new Map([
+        ["1", "1"],
+        ["2", "2"],
+      ]),
     )
   })
 
@@ -142,17 +300,47 @@ describe("flowsAdapter", () => {
           folderId: null,
         },
       ])
-      mockFindPublished.mockResolvedValue({
-        startNodeId: "1",
-        nodes: [buildFlowNode("bot_field:7")],
-        edges: [],
-      })
-      mockFindDraft.mockResolvedValue(undefined)
+      mockFindPreferred.mockResolvedValue([
+        {
+          flowId: "flow-1",
+          startNodeId: "1",
+          nodes: [buildFlowNode("bot_field:7")],
+          edges: [],
+        },
+      ])
 
       const result = await flowsAdapter.collector.collect("ws-1", ["flow-1"])
 
       expect(result.hardDependencies).toEqual([
         { category: "settings", sourceId: "7" },
+      ])
+    })
+
+    test("reports a sequence a flow subscribes to as a sequences hard dependency", async () => {
+      mockFlowModelFindMany.mockResolvedValue([
+        {
+          id: "flow-1",
+          name: "Onboarding",
+          active: true,
+          enableInInbox: true,
+          folderId: null,
+        },
+      ])
+      const node = buildFlowNode("42") as {
+        data: { details: { steps: Record<string, unknown>[] } }
+      }
+      node.data.details.steps = [
+        { id: "40", stepType: "subscribeSequence", sequenceId: "55" },
+        { id: "41", stepType: "subscribeSequence", sequenceId: "55" },
+      ]
+      mockFindPreferred.mockResolvedValue([
+        { flowId: "flow-1", startNodeId: "1", nodes: [node], edges: [] },
+      ])
+
+      const result = await flowsAdapter.collector.collect("ws-1", ["flow-1"])
+
+      expect(result.hardDependencies).toEqual([
+        { category: "sequences", sourceId: "55" },
       ])
     })
 
@@ -173,18 +361,14 @@ describe("flowsAdapter", () => {
           folderId: null,
         },
       ])
-      mockFindDraft.mockResolvedValue(undefined)
-      mockFindPublished
-        .mockResolvedValueOnce({
+      mockFindPreferred.mockResolvedValue(
+        ["flow-1", "flow-2"].map((flowId) => ({
+          flowId,
           startNodeId: "1",
           nodes: [buildFlowNode("bot_field:7")],
           edges: [],
-        })
-        .mockResolvedValueOnce({
-          startNodeId: "1",
-          nodes: [buildFlowNode("bot_field:7")],
-          edges: [],
-        })
+        })),
+      )
 
       const result = await flowsAdapter.collector.collect("ws-1", [
         "flow-1",
@@ -206,16 +390,89 @@ describe("flowsAdapter", () => {
           folderId: null,
         },
       ])
-      mockFindDraft.mockResolvedValue(undefined)
-      mockFindPublished.mockResolvedValue({
-        startNodeId: "1",
-        nodes: [buildFlowNode("42")],
-        edges: [],
-      })
+      mockFindPreferred.mockResolvedValue([
+        {
+          flowId: "flow-1",
+          startNodeId: "1",
+          nodes: [buildFlowNode("42")],
+          edges: [],
+        },
+      ])
 
       const result = await flowsAdapter.collector.collect("ws-1", ["flow-1"])
 
       expect(result.hardDependencies).toEqual([])
+    })
+
+    test("loads every flow's version in one repository call", async () => {
+      mockFlowModelFindMany.mockResolvedValue(
+        ["flow-1", "flow-2", "flow-3"].map((id) => ({
+          id,
+          name: id,
+          active: true,
+          enableInInbox: true,
+          folderId: null,
+        })),
+      )
+      mockFindPreferred.mockResolvedValue([
+        { flowId: "flow-1", startNodeId: "1", nodes: [], edges: [] },
+        { flowId: "flow-3", startNodeId: "1", nodes: [], edges: [] },
+      ])
+
+      const result = await flowsAdapter.collector.collect("ws-1", [
+        "flow-1",
+        "flow-2",
+        "flow-3",
+      ])
+
+      expect(mockFindPreferred).toHaveBeenCalledTimes(1)
+      expect(mockFindPreferred).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        flowIds: ["flow-1", "flow-2", "flow-3"],
+      })
+      expect(result.entries.map((entry) => entry.sourceId)).toEqual([
+        "flow-1",
+        "flow-3",
+      ])
+    })
+
+    test("reports the product categories a sendCollection filters by so they are shipped", async () => {
+      mockFlowModelFindMany.mockResolvedValue([
+        {
+          id: "flow-1",
+          name: "Shop",
+          active: true,
+          enableInInbox: true,
+          folderId: null,
+        },
+      ])
+      mockFindPreferred.mockResolvedValue([
+        {
+          flowId: "flow-1",
+          startNodeId: "1",
+          nodes: [
+            {
+              id: "1",
+              data: {
+                details: {
+                  steps: [
+                    {
+                      id: "s1",
+                      stepType: "sendCollection",
+                      conditions: { categoryId: "321", subcategoryId: "654" },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+          edges: [],
+        },
+      ])
+
+      const result = await flowsAdapter.collector.collect("ws-1", ["flow-1"])
+
+      expect([...result.productCategoryIds].sort()).toEqual(["321", "654"])
     })
 
     test("returns an empty result without a hard dependency for an empty id list", async () => {

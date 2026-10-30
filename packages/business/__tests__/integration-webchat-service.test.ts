@@ -191,8 +191,25 @@ vi.mock("../src/flow/service", () => ({
   flowService: { findActiveById: mockFindActiveFlowById },
 }))
 
+// Runs through the mocked `db.transaction` and records the initial lock keys.
+const { lockOptionsSpy } = vi.hoisted(() => ({ lockOptionsSpy: vi.fn() }))
+vi.mock("../src/template/template-resource-locks", async () => {
+  const { db } = await import("@chatbotx.io/database/client")
+  return {
+    withTemplateLockedTransaction: (
+      run: (tx: unknown) => unknown,
+      options?: unknown,
+    ) => {
+      lockOptionsSpy(options)
+      return db.transaction(run as never)
+    },
+  }
+})
+
 vi.mock("../src/template/installed-resource.service", () => ({
   assertDeletable: vi.fn(async () => undefined),
+
+  assertResourceEditable: vi.fn(),
 }))
 
 vi.mock("../src/workspace", () => ({
@@ -662,6 +679,35 @@ describe("integrationWebchatService.update", () => {
     expect(mockUpdateSet).toHaveBeenCalledWith(
       expect.objectContaining({ welcomeFlowId: "flow-1" }),
     )
+  })
+
+  test("locks the webchat and its welcome flow before the stored row is read", async () => {
+    mockFindActiveFlowById.mockResolvedValueOnce({ id: "flow-1" })
+
+    await integrationWebchatService.update({
+      workspaceId: "ws-1",
+      id: "webchat-1",
+      data: { welcomeFlowId: "flow-1" },
+    })
+
+    expect(lockOptionsSpy).toHaveBeenCalledWith({
+      initialKeys: [
+        { kind: "integrationWebchat", resourceId: "webchat-1" },
+        { kind: "flow", resourceId: "flow-1" },
+      ],
+    })
+  })
+
+  test("locks only the webchat when no welcome flow is written", async () => {
+    await integrationWebchatService.update({
+      workspaceId: "ws-1",
+      id: "webchat-1",
+      data: {},
+    })
+
+    expect(lockOptionsSpy).toHaveBeenCalledWith({
+      initialKeys: [{ kind: "integrationWebchat", resourceId: "webchat-1" }],
+    })
   })
 
   // Prevents a caller from pointing welcomeFlowId at another workspace's

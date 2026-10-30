@@ -3,6 +3,12 @@ import type { QrStyles, ReflinkType } from "@chatbotx.io/database/partials"
 import { reflinkModel } from "@chatbotx.io/database/schema"
 import { createId } from "@chatbotx.io/utils"
 import { insertWithNameRetry } from "./naming"
+import {
+  EMPTY_COLLECT_RESULT,
+  resolveRef,
+  updateNotSupported,
+  verifyOwnedIds,
+} from "./shared"
 import type {
   PatchTask,
   ResourceAdapter,
@@ -36,6 +42,10 @@ export const entryPointLinksAdapter: ResourceAdapter = {
   providesKinds: [],
   consumesKinds: ["flow", "customField"],
   deferredKinds: [],
+  trackedKind: "reflink",
+  folderTypes: [],
+  minFormatVersion: 1,
+  sync: updateNotSupported("entryPointLinks"),
 
   async insert(
     ctx: TemplateInstallContext,
@@ -107,25 +117,17 @@ export const entryPointLinksAdapter: ResourceAdapter = {
     },
 
     async verifyOwnership(workspaceId, ids) {
-      const uniqueIds = [...new Set(ids)]
-      if (uniqueIds.length === 0) {
-        return []
-      }
-      const rows = await db.query.reflinkModel.findMany({
-        where: { workspaceId, id: { in: uniqueIds } },
-        columns: { id: true },
-      })
-      return rows.map((row) => row.id)
+      return await verifyOwnedIds(ids, (uniqueIds) =>
+        db.query.reflinkModel.findMany({
+          where: { workspaceId, id: { in: uniqueIds } },
+          columns: { id: true },
+        }),
+      )
     },
 
     async collect(workspaceId, ids) {
       if (ids.length === 0) {
-        return {
-          entries: [],
-          folderIds: [],
-          productCategoryIds: [],
-          hardDependencies: [],
-        }
+        return EMPTY_COLLECT_RESULT
       }
       const rows = await db.query.reflinkModel.findMany({
         where: { workspaceId, id: { in: [...ids] } },
@@ -162,19 +164,10 @@ export const entryPointLinksAdapter: ResourceAdapter = {
 const resolveCustomFieldRef = (
   ctx: TemplateInstallContext,
   entry: TemplateEntryPointLinkEntry,
-): string | null => {
-  if (!entry.customFieldId) {
-    return null
-  }
-  const targetId = ctx.idMaps.customField?.get(entry.customFieldId)
-  if (!targetId) {
-    ctx.warn({
-      category: "entryPointLinks",
-      entityKind: "customField",
-      path: `entryPointLinks.${entry.sourceId}.customFieldId`,
-      value: entry.customFieldId,
-    })
-    return null
-  }
-  return targetId
-}
+): string | null =>
+  resolveRef(ctx, {
+    category: "entryPointLinks",
+    kind: "customField",
+    path: `entryPointLinks.${entry.sourceId}.customFieldId`,
+    sourceRef: entry.customFieldId,
+  })

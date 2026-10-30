@@ -1970,6 +1970,7 @@
       "installing": "Installing",
       "completed": "Tamamlandı",
       "partial": "Partial",
+      "uninstalled": "Uninstalled",
       "failed": "Başarısız",
       "success": "Başarılı",
       "error": "Hata"
@@ -2709,7 +2710,8 @@
       "settings": "Ayarlar",
       "miniApps": "Mini Apps",
       "leaderboards": "Liderlik tabloları",
-      "pipelines": "İşlem Hatları"
+      "pipelines": "İşlem Hatları",
+      "templates": "Şablonlar"
     },
     "adReferral": {
       "label": "Ads",
@@ -6647,14 +6649,105 @@
       "dialogDescription": "Bu bağlantıya sahip herkes, bu şablonun bir kopyasını kendi kuruluşunuzdaki bir çalışma alanına yükleyebilir.",
       "enableLabel": "Paylaşım bağlantısını etkinleştir",
       "linkLabel": "Paylaşım bağlantısı",
-      "description": "Bağlantıya sahip olan herkes bu şablonu kendi çalışma alanına yükleyebilir."
+      "description": "Bağlantıya sahip olan herkes bu şablonu kendi çalışma alanına yükleyebilir.",
+      "rotateLabel": "Rotate link",
+      "rotateTitle": "Rotate share link?",
+      "rotateDescription": "The current link stops working immediately. Anyone who still needs to install this template needs the new link.",
+      "rotated": "Share link rotated",
+      "expiryLabel": "Link expires",
+      "expiryHint": "Leave empty for a link that never expires.",
+      "clearExpiry": "Remove expiry",
+      "expiredNotice": "This link has expired. Set a later date or remove the expiry to share it again."
+    },
+    "sync": {
+      "title": "Updates",
+      "updateAvailable": "Update available",
+      "upToDate": "Up to date",
+      "updateNow": "Update now",
+      "updating": "Updating…",
+      "version": "Template version {version}",
+      "lastSynced": "last updated {date}",
+      "autoUpdateLabel": "Update automatically when the template changes",
+      "noHistory": "No updates yet.",
+      "counts": "{created} added · {updated} updated · {detached} detached",
+      "notUpdatable": "{count} not updatable yet",
+      "overwritten": "{name} was edited and replaced by the update",
+      "restore": "Restore my version",
+      "restored": "Your version was restored",
+      "status": {
+        "pending": "Queued",
+        "running": "Running",
+        "completed": "Completed",
+        "partial": "Partial",
+        "failed": "Failed",
+        "skipped": "Skipped",
+        "cancelled": "Cancelled"
+      },
+      "trigger": {
+        "autoUpdate": "Automatic",
+        "manual": "Manual",
+        "reinstall": "Reinstall"
+      },
+      "publisherAccessLabel": "Let the publisher see this workspace and uninstall the template",
+      "publisherAccessHint": "Only the workspace name is shared; your edited copies are always kept."
+    },
+    "installers": {
+      "title": "Installers",
+      "workspace": "Workspace",
+      "installs": "Installs",
+      "lastInstalled": "Last installed",
+      "version": "Version",
+      "autoUpdate": "Auto-update",
+      "uninstalled": "Uninstalled",
+      "hidden": "Workspace not shared",
+      "totalInstallEvents": "Toplam kurulum (tüm zamanlar)",
+      "uninstallNotAllowed": "Kurulumu yapan, yayıncıların bu kopyayı kaldırmasına izin vermedi.",
+      "loadError": "Kurulum yapanlar yüklenemedi. Tekrar deneyin.",
+      "byVersionTitle": "Installs by version",
+      "versionLabel": "Version {version}",
+      "byVersionHint": "The newest version is {version}. Grey bars are copies that are behind."
     },
     "installs": {
       "title": "Yüklemeler",
       "resources": "Kaynaklar",
       "warnings": "Uyarılar",
       "completedAt": "Tamamlanma tarihi",
-      "autoUpdate": "Otomatik güncelleme"
+      "autoUpdate": "Otomatik güncelleme",
+      "detailTitle": "Install details",
+      "installedBy": "Installed by",
+      "viaApi": "API token",
+      "attempts": "Attempts",
+      "autoUpdateOn": "On",
+      "autoUpdateOff": "Off",
+      "retry": "Retry install",
+      "resourcesTitle": "Installed resources",
+      "noResources": "Nothing was created yet.",
+      "deletedResource": "Deleted resource",
+      "viewOnly": "View only",
+      "created": "Created",
+      "reused": "Reused",
+      "loadMore": "Load more",
+      "backToList": "Back to installs",
+      "viewWarnings": "View warnings",
+      "warningsHint": "Items the install skipped or could not fully bring over.",
+      "warningsTruncated": "Showing {shown} of {total} warnings.",
+      "statusFilter": "Status",
+      "allStatuses": "All statuses",
+      "errors": {
+        "unknown": "The install failed. Try again, or contact support if it keeps failing.",
+        "templatePayloadIncompatible": "This template was saved in a newer format than this server can install.",
+        "templateInstallationSourceMissing": "The template was deleted before the install ran.",
+        "templateCrossTenantInstall": "This template is not available for your workspace.",
+        "templateCategoryPermissionDenied": "You no longer have permission to install everything in this template.",
+        "templateInvalidInboxBinding": "A selected inbox does not match the template.",
+        "templateInstallEnqueueFailed": "The install could not be queued.",
+        "templateInstallFailed": "The install failed. Try again.",
+        "templateInstallAbandoned": "The install did not finish in time and was closed.",
+        "templateInstallSuperseded": "A newer install of this template replaced this one.",
+        "workspaceOwnerBlocked": "The workspace owner's account is blocked."
+      },
+      "uninstalledBy": "{by, select, publisher {The publisher uninstalled this template.} installer {This template was uninstalled from this workspace.} other {This template was uninstalled.}}",
+      "uninstalledSummary": "{deleted} deleted, {kept} kept."
     },
     "form": {
       "contents": "Şablon içeriği",
@@ -6673,8 +6766,20 @@
       "installBehavior": "Yükleme davranışı",
       "createInstallFolder": "Ayrılmış bir klasöre yükle",
       "createInstallFolderDescription": "Yüklenen her kaynağı bu şablonun adını taşıyan tek bir yeni klasörün altına yerleştirir.",
-      "defaultAutoUpdate": "Yüklemeleri varsayılan olarak güncelleme için işaretle",
-      "defaultAutoUpdateDescription": "Bu şablonu her yeniden yayınladığınızda, yeni yüklemelerde güncelleme bildirimi gösterilir."
+      "defaultAutoUpdate": "Update new installs automatically by default",
+      "defaultAutoUpdateDescription": "Whenever you save this template with changed content, installs that follow auto-update are overwritten with the new content (copies the installer edited are backed up first). Installers can turn it off.",
+      "viewOnly": "Salt görüntüleme",
+      "viewOnlyAll": "Seçilenlerin tümünü salt görüntüleme yap",
+      "includedAutomatically": {
+        "title": "Included automatically",
+        "hint": "Taken along because something you selected needs it. Read only.",
+        "rows": "{count, plural, one {# more item} other {# more items}}",
+        "kind": {
+          "folders": "Folders",
+          "inboxes": "Inboxes"
+        },
+        "dropped": "{count, plural, one {# reference to an item the template does not include will be dropped on install (a trigger that loses one is switched off)} other {# references to items the template does not include will be dropped on install (a trigger that loses one is switched off)}}"
+      }
     },
     "categories": {
       "flows": "Akışlar",
@@ -6689,8 +6794,81 @@
       "keywords": "Anahtar Kelimeler",
       "entryPointLinks": "Giriş Noktası Bağlantıları",
       "triggers": "Tetikleyiciler",
-      "fbCommentAutomations": "Facebook yorum otomasyonları",
-      "settings": "Ayarlar"
+      "fbCommentAutomations": "Yorum otomasyonları",
+      "settings": "Ayarlar",
+      "sequences": "Sequences",
+      "aiMcpServers": "MCP servers",
+      "aiFiles": "AI knowledge files",
+      "questionnaires": "Questionnaires",
+      "couponTopics": "Coupon topics",
+      "pipelines": "İşlem Hatları"
+    },
+    "locked": {
+      "flowBanner": "Bu akış salt görüntüleme şablonundan yüklendi. Görebilirsiniz ancak düzenleyemezsiniz.",
+      "badge": "Salt görüntüleme",
+      "editorBanner": "Bu, salt görüntüleme şablonundan yüklendi. Görebilirsiniz ancak düzenleyemezsiniz.",
+      "badgeHint": "Installed from a view-only template"
+    },
+    "channels": {
+      "messenger": "Messenger",
+      "instagram": "Instagram",
+      "instagramFacebook": "Instagram (Facebook login)",
+      "threads": "Threads",
+      "tiktok": "TikTok",
+      "whatsapp": "WhatsApp",
+      "telegram": "Telegram",
+      "zalo": "Zalo",
+      "webchat": "Webchat",
+      "line": "LINE",
+      "email": "Email"
+    },
+    "uninstall": {
+      "title": "Uninstall template",
+      "description": "The template stops managing this workspace's copies: they stay yours, and view-only copies become editable. Only unmodified keywords it created are deleted.",
+      "loading": "Checking what will happen…",
+      "previewFailed": "Could not check what an uninstall would do.",
+      "failed": "Could not uninstall the template.",
+      "done": "Template uninstalled",
+      "confirm": "Uninstall",
+      "action": "Uninstall",
+      "deleted": "{count, plural, one {# unmodified keyword is deleted} other {# unmodified keywords are deleted}}",
+      "keptModified": "{count, plural, one {# edited or unverified copy is kept} other {# edited or unverified copies are kept}}",
+      "keptShared": "{count, plural, one {# shared tag or field is kept} other {# shared tags and fields are kept}}",
+      "keptByPolicy": "{count, plural, one {# other item is kept} other {# other items are kept}}",
+      "keptHasDependents": "{count, plural, one {# copy is kept because something still uses it} other {# copies are kept because something still uses them}}"
+    },
+    "warningCodes": {
+      "ambiguousSourceFieldToken": "Several source fields share this name, so the variables using it were left unchanged.",
+      "backupTooLarge": "A locally edited item was too large to back up, so it was not overwritten.",
+      "backupUnavailable": "The backup for this item is no longer available.",
+      "categoryPermissionDenied": "You do not have permission for this category, so it was skipped.",
+      "couponTopicExpired": "This coupon topic has already expired.",
+      "credentialRequired": "Add the credentials for this item before using it.",
+      "custom": "A referenced item was not found in this workspace, so the link was dropped.",
+      "customField": "A referenced item was not found in this workspace, so the link was dropped.",
+      "customFieldRenamed": "A field with this name and another type already exists, so a renamed field was created.",
+      "enqueueFailed": "Background processing could not be queued for this item.",
+      "flow": "A referenced item was not found in this workspace, so the link was dropped.",
+      "flowInvalidStructure": "The flow's structure is invalid, so it was skipped.",
+      "flowNotPublished": "The flow was installed as a draft and is not published.",
+      "flowSkippedRequiredReference": "The flow was skipped because a required reference could not be resolved.",
+      "folder": "A referenced item was not found in this workspace, so the link was dropped.",
+      "inboxBindingRequired": "Pick an inbox for this channel; until then the item stays inactive.",
+      "integration": "A referenced item was not found in this workspace, so the link was dropped.",
+      "localModifiedOverwritten": "A locally edited item was overwritten. A backup was saved and can be restored.",
+      "name": "No free name was found for this item, so it was skipped.",
+      "notUpdatable": "This kind of item is not updated automatically yet.",
+      "pipelineField": "A referenced item was not found in this workspace, so the link was dropped.",
+      "pipelineStage": "A referenced item was not found in this workspace, so the link was dropped.",
+      "postSelectionRequired": "Select the post again: the original post could not be carried over.",
+      "product": "A referenced item was not found in this workspace, so the link was dropped.",
+      "productCategory": "A referenced item was not found in this workspace, so the link was dropped.",
+      "questionImage": "An image could not be copied.",
+      "quota": "A plan limit was reached, so the item was skipped.",
+      "referenceRemoved": "A reference that could not be resolved was removed.",
+      "savedReply": "A referenced item was not found in this workspace, so the link was dropped.",
+      "savedReplyImage": "An image could not be copied.",
+      "tag": "A referenced item was not found in this workspace, so the link was dropped."
     }
   },
   "qrCodeGenerator": {
@@ -6904,7 +7082,34 @@
     "selectWorkspace": "Bir çalışma alanı seçin",
     "install": "Yükle",
     "installStarted": "Yükleme başladı",
-    "noEligibleWorkspaces": "Bu şablonu yüklemeye uygun bir çalışma alanınız yok."
+    "noEligibleWorkspaces": "Bu şablonu yüklemeye uygun bir çalışma alanınız yok.",
+    "alreadyInstalled": "This template is already installed in this workspace.",
+    "viewInstall": "View install",
+    "installAnotherCopy": "Install another copy",
+    "inboxesTitle": "Inboxes",
+    "inboxesHint": "This template was built around these inboxes. Choose which of your own inboxes to use; anything left out is installed switched off.",
+    "noInbox": "Don't connect — install switched off",
+    "noInboxAvailable": "No connected inbox on this channel",
+    "updateExisting": "Update installed copy",
+    "updateStarted": "Update started",
+    "publisherAccessLabel": "Let the publisher see this workspace's name and uninstall this template from it",
+    "publisherAccessHint": "They never see your data, contacts or email, and your edited copies are never deleted. You can turn this off later on the install page.",
+    "autoUpdateLabel": "Update automatically when the template changes",
+    "collisions": {
+      "title": "What the install will do here",
+      "loading": "Checking this workspace…",
+      "action": {
+        "create": "Created",
+        "reuse": "Reused",
+        "rename": "Renamed",
+        "bind": "Bound",
+        "unbound": "Left unbound"
+      },
+      "detail": {
+        "rename": "“{name}” already exists with another type, so the template’s one is added under a new name.",
+        "unbound": "“{name}” is left unconnected until you pick an inbox."
+      }
+    }
   },
   "extensionsMe": {
     "actions": {

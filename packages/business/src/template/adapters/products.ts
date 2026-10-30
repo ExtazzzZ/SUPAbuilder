@@ -5,6 +5,12 @@ import {
   productAddonService,
   productService,
 } from "../../product/service"
+import {
+  EMPTY_COLLECT_RESULT,
+  resolveRef,
+  updateNotSupported,
+  verifyOwnedIds,
+} from "./shared"
 import type {
   PatchTask,
   ResourceAdapter,
@@ -51,6 +57,10 @@ export const productsAdapter: ResourceAdapter = {
   providesKinds: ["product"],
   consumesKinds: ["productCategory", "product"],
   deferredKinds: ["product"],
+  trackedKind: "product",
+  folderTypes: [],
+  minFormatVersion: 1,
+  sync: updateNotSupported("products"),
 
   async insert(
     ctx: TemplateInstallContext,
@@ -134,25 +144,17 @@ export const productsAdapter: ResourceAdapter = {
     },
 
     async verifyOwnership(workspaceId, ids) {
-      const uniqueIds = [...new Set(ids)]
-      if (uniqueIds.length === 0) {
-        return []
-      }
-      const rows = await db.query.productModel.findMany({
-        where: { workspaceId, id: { in: uniqueIds } },
-        columns: { id: true },
-      })
-      return rows.map((row) => row.id)
+      return await verifyOwnedIds(ids, (uniqueIds) =>
+        db.query.productModel.findMany({
+          where: { workspaceId, id: { in: uniqueIds } },
+          columns: { id: true },
+        }),
+      )
     },
 
     async collect(workspaceId, ids) {
       if (ids.length === 0) {
-        return {
-          entries: [],
-          folderIds: [],
-          productCategoryIds: [],
-          hardDependencies: [],
-        }
+        return EMPTY_COLLECT_RESULT
       }
       const rows = await db.query.productModel.findMany({
         where: { workspaceId, id: { in: [...ids] } },
@@ -241,19 +243,10 @@ export const productsAdapter: ResourceAdapter = {
 const resolveCategoryReference = (
   ctx: TemplateInstallContext,
   sourceId: string | null | undefined,
-): string | null => {
-  if (!sourceId) {
-    return null
-  }
-  const targetId = ctx.idMaps.productCategory?.get(sourceId)
-  if (!targetId) {
-    ctx.warn({
-      category: "products",
-      entityKind: "productCategory",
-      path: "products.categoryId",
-      value: sourceId,
-    })
-    return null
-  }
-  return targetId
-}
+): string | null =>
+  resolveRef(ctx, {
+    category: "products",
+    kind: "productCategory",
+    path: "products.categoryId",
+    sourceRef: sourceId,
+  })

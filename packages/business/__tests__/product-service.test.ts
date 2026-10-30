@@ -11,14 +11,27 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   deleteRow: vi.fn(),
   insert: vi.fn(),
+  execute: vi.fn(),
   templateInstalledResourceFindMany: vi.fn(async () => []),
 }))
 
 /** Stands in for the transaction handle; every write is mocked at the repository. */
-const tx = {
+const newTx = () => ({
   delete: mocks.deleteRow,
   insert: mocks.insert,
-}
+  execute: mocks.execute,
+})
+// Fresh per test, like a real driver: the lock registry is keyed by the client.
+let tx = newTx()
+
+// The template lock guard has its own suite; these tests cover the service.
+vi.mock("../src/template/installed-resource.service", () => ({
+  assertDeletable: vi.fn(),
+  assertResourceEditable: vi.fn(),
+  changedKeysOf: vi.fn((_existing: unknown, patch: Record<string, unknown>) =>
+    Object.keys(patch),
+  ),
+}))
 
 vi.mock("@chatbotx.io/database/client", () => ({
   db: {
@@ -59,6 +72,9 @@ vi.mock("@chatbotx.io/redis", () => ({
 }))
 
 const { productService } = await import("../src/product/service")
+const { assertResourceEditable } = await import(
+  "../src/template/installed-resource.service"
+)
 
 const fullUpdate = {
   workspaceId: "workspace-1",
@@ -71,6 +87,7 @@ const fullUpdate = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  tx = newTx()
   mocks.categoryFind.mockResolvedValue({ id: "category-1", parentId: null })
   mocks.findProductsByIds.mockResolvedValue([])
   mocks.productCreate.mockResolvedValue({ id: "product-1" })
@@ -332,11 +349,11 @@ describe("productService sub-category parentage", () => {
     ).rejects.toThrow("does not belong to the selected category")
   })
 
-  test("does not read the product when the patch touches no sub-category", async () => {
+  test("does not read the product when the patch touches no sub-category or locked content", async () => {
     await productService.update({
       workspaceId: "workspace-1",
       productId: "product-1",
-      data: { name: "Renamed" },
+      data: { isActive: false },
     })
 
     expect(mocks.productFind).not.toHaveBeenCalled()
@@ -405,5 +422,107 @@ describe("productService write shaping", () => {
     ).rejects.toThrow("addon products do not exist")
 
     expect(mocks.productCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("productService template locks", () => {
+  test("update opens a locked transaction and guards before reading the product", async () => {
+    await productService.update({
+      workspaceId: "workspace-1",
+      productId: "product-1",
+      data: { name: "Renamed", categoryId: "category-1" },
+    })
+
+    expect(mocks.transaction).toHaveBeenCalledOnce()
+    expect(assertResourceEditable).toHaveBeenCalledTimes(1)
+    expect(assertResourceEditable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceKind: "product",
+        resourceIds: ["product-1"],
+        changedKeys: ["name", "categoryId"],
+        referencedParents: [
+          { kind: "productCategory", resourceId: "category-1" },
+        ],
+        tx,
+      }),
+    )
+    expect(
+      vi.mocked(assertResourceEditable).mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.categoryFind.mock.invocationCallOrder[0] as number)
+    expect(
+      vi.mocked(assertResourceEditable).mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.productUpdate.mock.invocationCallOrder[0] as number)
+  })
+
+  test("update holds the product and parent locks before the stored row is read", async () => {
+    await productService.update({
+      workspaceId: "workspace-1",
+      productId: "product-1",
+      data: { name: "Renamed", categoryId: "category-1" },
+    })
+
+    // One advisory lock per key: the product, then its category.
+    expect(mocks.execute).toHaveBeenCalledTimes(2)
+    expect(mocks.execute.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.productFind.mock.invocationCallOrder[0] as number,
+    )
+  })
+
+  test("update on a caller transaction guards on that transaction without opening another", async () => {
+    const callerTx = { marker: "caller" }
+
+    await productService.update({
+      workspaceId: "workspace-1",
+      productId: "product-1",
+      data: { name: "Renamed" },
+      tx: callerTx as never,
+    })
+
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(assertResourceEditable).toHaveBeenCalledWith(
+      expect.objectContaining({ tx: callerTx }),
+    )
+  })
+
+  test("a blocked update never writes", async () => {
+    vi.mocked(assertResourceEditable).mockRejectedValueOnce(new Error("locked"))
+
+    await expect(
+      productService.update({
+        workspaceId: "workspace-1",
+        productId: "product-1",
+        data: { name: "Renamed" },
+      }),
+    ).rejects.toThrow("locked")
+    expect(mocks.productUpdate).not.toHaveBeenCalled()
+  })
+
+  test("updateFull locks the categories and addon products the payload references", async () => {
+    mocks.findProductsByIds.mockResolvedValue([{ id: "addon-1" }])
+    mocks.deleteRow.mockReturnValue({ where: vi.fn() })
+    mocks.insert.mockReturnValue({
+      values: vi.fn(() => ({ returning: vi.fn() })),
+    })
+
+    await productService.updateFull({
+      ...fullUpdate,
+      categoryId: "category-1",
+      addons: [{ addonProductIds: ["addon-1"] } as never],
+    })
+
+    expect(assertResourceEditable).toHaveBeenCalledTimes(1)
+    expect(assertResourceEditable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceIds: ["product-1"],
+        referencedParents: [
+          { kind: "productCategory", resourceId: "category-1" },
+          { kind: "product", resourceId: "addon-1" },
+        ],
+        tx,
+      }),
+    )
+    expect(
+      vi.mocked(assertResourceEditable).mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.productUpdate.mock.invocationCallOrder[0] as number)
   })
 })

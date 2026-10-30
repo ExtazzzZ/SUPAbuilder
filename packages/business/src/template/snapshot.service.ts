@@ -4,14 +4,16 @@ import type {
   TemplateResourceCategory,
   TemplateSelection,
 } from "@chatbotx.io/database/partials"
-import { templateCategories } from "@chatbotx.io/database/partials"
+import { inboxRepository } from "@chatbotx.io/database/repositories"
 import type { CustomFieldModel, TagModel } from "@chatbotx.io/database/types"
 import {
   parseTemplateExport,
   TEMPLATE_EXPORT_FORMAT_VERSION,
+  TEMPLATE_EXPORT_FORMAT_VERSION_V2,
   type TemplateExport,
   type TemplateFlowEntry,
 } from "@chatbotx.io/flow-config"
+import { isNumericId } from "@chatbotx.io/utils/id"
 import { ChatbotXException } from "../errors"
 import {
   collectFolderAncestry,
@@ -19,6 +21,17 @@ import {
 } from "./adapters/manifests/collect-hierarchies"
 import { collectPipelineManifest } from "./adapters/manifests/collect-pipelines"
 import { templateAdapterRegistry } from "./adapters/registry"
+import {
+  buildPayloadResources,
+  categoriesRequiringV2,
+} from "./adapters/registry-derived"
+import { categoryCountsOfPayload } from "./category-counts"
+import { buildItemPermissions } from "./item-permissions"
+import { collectManifestReferences } from "./manifest-references"
+import {
+  countRowsWithUnshippedReferences,
+  type TriggerConditionRow,
+} from "./trigger-conditions"
 
 const MAX_PAYLOAD_RESOURCES = 200
 // `payload` is a jsonb column, not S3 — a row-count cap alone doesn't bound
@@ -134,6 +147,37 @@ const resolveCategoryIds = async (
   return verified
 }
 
+/**
+ * The tag and custom-field ids referenced by `entries` — by id slot or by
+ * `{{name}}` token — that exist in this workspace. A token name shared by two
+ * fields of different types cannot be attributed to either, so it is skipped
+ * (the install leaves such a token as written and warns).
+ */
+const resolveReferencedManifestIds = async (
+  workspaceId: string,
+  entries: readonly unknown[],
+): Promise<{ tagIds: string[]; customFieldIds: string[] }> => {
+  const references = collectManifestReferences(entries)
+  const namedFields =
+    references.customFieldNames.size > 0
+      ? await db.query.customFieldModel.findMany({
+          where: {
+            workspaceId,
+            name: { in: [...references.customFieldNames] },
+          },
+          columns: { id: true, name: true },
+        })
+      : []
+  const idsByName = Map.groupBy(namedFields, (field) => field.name)
+  const unambiguousIds = [...idsByName.values()]
+    .filter((fields) => fields.length === 1)
+    .map(([field]) => field.id)
+  return {
+    tagIds: [...references.tagIds].filter(isNumericId),
+    customFieldIds: [...references.customFieldIds, ...unambiguousIds],
+  }
+}
+
 type BuildSnapshotInput = {
   workspaceId: string
   tenantId: string
@@ -143,6 +187,14 @@ type BuildSnapshotInput = {
 type BuildSnapshotResult = {
   payload: TemplateExport
   categoryCounts: TemplateCategoryCounts
+  /**
+   * References the install will drop: tags and custom fields an included
+   * resource still names but that no longer exist in the workspace, plus
+   * trigger condition rows naming something the template does not carry (a
+   * product that was not selected, a deleted pipeline, ...). The install
+   * reports them as `referenceRemoved`. The editor shows the count.
+   */
+  droppedReferenceCount: number
 }
 
 const RESOURCE_CATEGORIES = Object.keys(
@@ -178,14 +230,32 @@ const foldHardDependencies = (
 }
 
 /**
+ * The `inboxes` manifest: identity (channel and name) of each source inbox an
+ * included resource is scoped to. Only inboxes the workspace owns are listed,
+ * so a stale or foreign id never reaches the payload.
+ */
+const buildInboxManifest = async (
+  workspaceId: string,
+  inboxIds: readonly string[],
+): Promise<Record<string, { channelType: string; name: string }>> => {
+  const rows = await inboxRepository.listIdentitiesByIds({
+    workspaceId,
+    ids: [...new Set(inboxIds)],
+  })
+  return Object.fromEntries(
+    rows.map((row) => [row.id, { channelType: row.channel, name: row.name }]),
+  )
+}
+
+/**
  * Resolves a selection to a concrete, validated snapshot envelope:
  * 1. Resolve every resource category's selection to a concrete id list via
  *    its own adapter (`mode:"all"` expansion + `mode:"ids"` ownership check).
  * 2. Collect every category via its adapter's `collect`, then fold any
  *    reported hard dependencies into the relevant categories' id sets and
- *    re-collect only the categories that gained ids — bounded by the number
- *    of resource categories, since each pass only ever adds ids already
- *    known to exist in the workspace.
+ *    re-collect only the categories that gained ids, until a pass adds
+ *    nothing (dependencies can loop back, so the number of passes is not
+ *    bounded by the number of categories; the resource cap ends a runaway).
  * 3. Merge every category's folder/productCategory references into the two
  *    hierarchical manifests, plus the manifest-only categories
  *    (`tags`/`customFields`).
@@ -230,7 +300,7 @@ export const buildTemplateSnapshot = async (
       resolveCustomFieldIds,
     )
   }
-  const tagIds =
+  const selectedTagIds =
     tagSelection?.mode === "all"
       ? (
           await db.query.tagModel.findMany({
@@ -239,7 +309,7 @@ export const buildTemplateSnapshot = async (
           })
         ).map((row) => row.id)
       : [...new Set(tagSelection?.mode === "ids" ? tagSelection.ids : [])]
-  const customFieldIds =
+  const selectedCustomFieldIds =
     customFieldSelection?.mode === "all"
       ? (
           await db.query.customFieldModel.findMany({
@@ -256,8 +326,7 @@ export const buildTemplateSnapshot = async (
         ]
 
   // Step 2: collect every category, folding hard dependencies until a pass
-  // adds nothing new. Bounded by RESOURCE_CATEGORIES.length — each pass can
-  // only add ids for categories that exist, so it terminates.
+  // adds nothing new.
   const resultsByCategory: Partial<
     Record<
       TemplateResourceCategory,
@@ -267,11 +336,12 @@ export const buildTemplateSnapshot = async (
     >
   > = {}
   let categoriesToCollect = new Set(RESOURCE_CATEGORIES)
-  for (
-    let pass = 0;
-    pass < RESOURCE_CATEGORIES.length && categoriesToCollect.size > 0;
-    pass++
-  ) {
+  // Until a pass adds nothing new. Dependencies can loop back (a flow needs a
+  // sequence whose step sends another flow, ...), so the number of passes is
+  // not bounded by the number of categories; it ends because a pass only adds
+  // ids from a finite workspace, and the size check below stops a runaway
+  // chain as soon as it outgrows what a template may hold.
+  while (categoriesToCollect.size > 0) {
     const collectedThisPass = await Promise.all(
       [...categoriesToCollect].map(async (category) => {
         const collector = templateAdapterRegistry[category].collector
@@ -292,7 +362,26 @@ export const buildTemplateSnapshot = async (
       idsByCategory,
       allHardDependencies,
     )
+    if (
+      Object.values(idsByCategory).reduce((sum, ids) => sum + ids.length, 0) >
+      MAX_PAYLOAD_RESOURCES
+    ) {
+      throw templatePayloadTooLargeException()
+    }
   }
+
+  // Tags and custom fields an included resource uses are shipped even when
+  // their own category was not selected (the install would otherwise leave a
+  // foreign id in the copied flow). Ownership is enforced by the row queries
+  // below, which only return this workspace's live rows.
+  const referenced = await resolveReferencedManifestIds(
+    workspaceId,
+    Object.values(resultsByCategory).flatMap((result) => result?.entries ?? []),
+  )
+  const tagIds = [...new Set([...selectedTagIds, ...referenced.tagIds])]
+  const customFieldIds = [
+    ...new Set([...selectedCustomFieldIds, ...referenced.customFieldIds]),
+  ]
 
   const totalResources =
     Object.values(idsByCategory).reduce((sum, ids) => sum + ids.length, 0) +
@@ -325,7 +414,11 @@ export const buildTemplateSnapshot = async (
       collectProductCategoryAncestry(workspaceId, allProductCategoryIds),
       tagIds.length > 0
         ? db.query.tagModel.findMany({
-            where: { workspaceId, id: { in: tagIds } },
+            where: {
+              workspaceId,
+              id: { in: tagIds },
+              deletedAt: { isNull: true as const },
+            },
             columns: { id: true, name: true },
           })
         : Promise.resolve([]),
@@ -337,13 +430,82 @@ export const buildTemplateSnapshot = async (
         : Promise.resolve([]),
     ])
 
+  const foundTagIds = new Set(tagRows.map((row) => row.id))
+  const foundCustomFieldIds = new Set(customFieldRows.map((row) => row.id))
+  const droppedManifestReferences =
+    new Set(referenced.tagIds.filter((id) => !foundTagIds.has(id))).size +
+    new Set(
+      referenced.customFieldIds.filter((id) => !foundCustomFieldIds.has(id)),
+    ).size
+
+  const triggerConditions = (resultsByCategory.triggers?.entries ?? []).flatMap(
+    (entry) => (entry.conditions ?? []) as TriggerConditionRow[],
+  )
   const pipelineManifest = await collectPipelineManifest(
     workspaceId,
     (resultsByCategory.flows?.entries ?? []) as unknown as TemplateFlowEntry[],
+    triggerConditions,
+  )
+  const sourceIdsOf = (category: TemplateResourceCategory) =>
+    new Set(
+      (resultsByCategory[category]?.entries ?? []).map(
+        (entry) => entry.sourceId,
+      ),
+    )
+  // A condition row naming something the template does not carry is dropped
+  // by the install (and its trigger switched off), so it counts as dropped.
+  // Tags and custom fields are left out here: the manifest count above
+  // already includes the ones condition rows name.
+  const droppedConditionRows = countRowsWithUnshippedReferences(
+    triggerConditions,
+    {
+      sequence: sourceIdsOf("sequences"),
+      product: sourceIdsOf("products"),
+      productCategory: new Set(Object.keys(productCategoryManifest)),
+      pipeline: new Set(Object.keys(pipelineManifest)),
+      pipelineStage: new Set(
+        Object.values(pipelineManifest).flatMap((pipeline) =>
+          (pipeline.stages ?? []).map((stage) => stage.sourceId),
+        ),
+      ),
+    },
   )
 
-  const payload: TemplateExport = {
-    formatVersion: TEMPLATE_EXPORT_FORMAT_VERSION,
+  const itemPermissions = buildItemPermissions(selection, {
+    ...Object.fromEntries(
+      RESOURCE_CATEGORIES.map((category) => [
+        category,
+        (resultsByCategory[category]?.entries ?? []).map(
+          (entry) => entry.sourceId,
+        ),
+      ]),
+    ),
+    tags: tagRows.map((row) => row.id),
+    customFields: customFieldRows.map((row) => row.id),
+    productCategories: Object.keys(productCategoryManifest),
+  })
+  const hasItemPermissions = Object.keys(itemPermissions).length > 0
+  const inboxManifest = await buildInboxManifest(
+    workspaceId,
+    Object.values(resultsByCategory).flatMap(
+      (result) => result?.inboxIds ?? [],
+    ),
+  )
+  // A payload that names inboxes is v2: an older worker must refuse it
+  // rather than install automations it cannot bind to an inbox.
+  const needsV2 =
+    hasItemPermissions ||
+    Object.keys(inboxManifest).length > 0 ||
+    // A category an older worker does not know would be dropped on its parse.
+    categoriesRequiringV2(templateAdapterRegistry).some(
+      (category) => (resultsByCategory[category]?.entries.length ?? 0) > 0,
+    )
+
+  const payload = {
+    formatVersion: needsV2
+      ? TEMPLATE_EXPORT_FORMAT_VERSION_V2
+      : TEMPLATE_EXPORT_FORMAT_VERSION,
+    ...(hasItemPermissions ? { permissions: itemPermissions } : {}),
     exportedAt: new Date().toISOString(),
     source: { workspaceId, tenantId },
     manifests: {
@@ -352,37 +514,9 @@ export const buildTemplateSnapshot = async (
       productCategories: productCategoryManifest,
       folders: folderManifest,
       pipelines: pipelineManifest,
+      inboxes: inboxManifest,
     },
-    resources: {
-      // `flows` alone has a strict entry shape (`TemplateFlowEntry`) rather
-      // than the loose `{sourceId} & Record<string, unknown>` every other
-      // category uses — `flowsAdapter.collect` already builds exactly that
-      // shape (mirroring `flowsAdapter.insert`'s own expectations), so this
-      // is a type-level assertion of an invariant `parseTemplateExport`
-      // re-validates immediately below, not an unchecked cast.
-      flows: (resultsByCategory.flows?.entries ??
-        []) as unknown as TemplateFlowEntry[],
-      products: resultsByCategory.products?.entries ?? [],
-      aiFunctions: resultsByCategory.aiFunctions?.entries ?? [],
-      aiAgents: resultsByCategory.aiAgents?.entries ?? [],
-      calendars: resultsByCategory.calendars?.entries ?? [],
-      webchats: resultsByCategory.webchats?.entries ?? [],
-      keywords: resultsByCategory.keywords?.entries ?? [],
-      entryPointLinks: resultsByCategory.entryPointLinks?.entries ?? [],
-      triggers: resultsByCategory.triggers?.entries ?? [],
-      fbCommentAutomations:
-        resultsByCategory.fbCommentAutomations?.entries ?? [],
-      settings: {
-        savedReplies:
-          resultsByCategory.settings?.entries.filter(
-            (entry) => entry.kind === "savedReply",
-          ) ?? [],
-        botFields:
-          resultsByCategory.settings?.entries.filter(
-            (entry) => entry.kind === "botField",
-          ) ?? [],
-      },
-    },
+    resources: buildPayloadResources(resultsByCategory),
   }
 
   const parsed = parseTemplateExport(payload)
@@ -393,27 +527,18 @@ export const buildTemplateSnapshot = async (
     )
   }
 
-  const payloadBytes = Buffer.byteLength(JSON.stringify(parsed.data), "utf8")
+  const payloadBytes = new TextEncoder().encode(
+    JSON.stringify(parsed.data),
+  ).byteLength
   if (payloadBytes > MAX_PAYLOAD_BYTES) {
     throw templatePayloadTooManyBytesException()
   }
 
-  const countByCategory: Partial<Record<string, number>> = {
-    tags: tagRows.length,
-    customFields: customFieldRows.length,
-    ...Object.fromEntries(
-      RESOURCE_CATEGORIES.map((category) => [
-        category,
-        resultsByCategory[category]?.entries.length ?? 0,
-      ]),
-    ),
-  }
-  const categoryCounts = Object.fromEntries(
-    templateCategories.options.map((category) => [
-      category,
-      countByCategory[category] ?? 0,
-    ]),
-  ) as TemplateCategoryCounts
+  const categoryCounts = categoryCountsOfPayload(parsed.data)
 
-  return { payload: parsed.data, categoryCounts }
+  return {
+    payload: parsed.data,
+    categoryCounts,
+    droppedReferenceCount: droppedManifestReferences + droppedConditionRows,
+  }
 }

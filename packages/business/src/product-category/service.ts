@@ -9,6 +9,12 @@ import {
 } from "@chatbotx.io/database/repositories"
 import { BaseService } from "../base.service"
 import { ChatbotXException, notFoundException } from "../errors"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 
 const normalizeCategoryName = (name: string): string => name.trim()
 
@@ -150,26 +156,65 @@ class ProductCategoryService extends BaseService {
       await this.assertHasNoChildren(input)
     }
     try {
-      const row = await db.transaction(async (tx) => {
-        const before =
-          input.parentId === undefined
-            ? undefined
-            : await productCategoryRepository.find(input, tx)
-        const updated = await productCategoryRepository.update(
-          { ...input, name },
-          tx,
-        )
-        if (updated && before && input.parentId !== undefined) {
-          await this.refileReferences({
-            workspaceId: input.workspaceId,
-            categoryId: input.categoryId,
-            previousParentId: before.parentId ?? null,
+      // The category and a new parent are locked before the stored row is read,
+      // so the diff that decides the guard is computed under the lock.
+      const row = await withTemplateLockedTransaction(
+        async (tx) => {
+          // Visibility and rank are the installer's; name, parent and image are
+          // content, and only an actual change to them is guarded (a full form
+          // always submits the name).
+          const stored = await productCategoryRepository.find(input, tx)
+          const submitted = {
+            name,
             parentId: input.parentId,
+            imageUrl: input.imageUrl,
+          }
+          const changedKeys = stored
+            ? changedKeysOf(stored, submitted)
+            : Object.keys(submitted).filter(
+                (key) => submitted[key as keyof typeof submitted] !== undefined,
+              )
+          // A re-parent also locks the new parent category.
+          await assertResourceEditable({
+            workspaceId: input.workspaceId,
+            resourceKind: "productCategory",
+            resourceIds: [input.categoryId],
+            changedKeys,
+            referencedParents: input.parentId
+              ? [{ kind: "productCategory", resourceId: input.parentId }]
+              : [],
             tx,
           })
-        }
-        return updated
-      })
+          const before = input.parentId === undefined ? undefined : stored
+          const updated = await productCategoryRepository.update(
+            { ...input, name },
+            tx,
+          )
+          if (updated && before && input.parentId !== undefined) {
+            await this.refileReferences({
+              workspaceId: input.workspaceId,
+              categoryId: input.categoryId,
+              previousParentId: before.parentId ?? null,
+              parentId: input.parentId,
+              tx,
+            })
+          }
+          return updated
+        },
+        {
+          initialKeys: [
+            { kind: "productCategory", resourceId: input.categoryId },
+            ...(input.parentId
+              ? [
+                  {
+                    kind: "productCategory" as const,
+                    resourceId: input.parentId,
+                  },
+                ]
+              : []),
+          ],
+        },
+      )
       if (!row) {
         throw notFoundException("Product category not found")
       }
@@ -192,6 +237,14 @@ class ProductCategoryService extends BaseService {
         { workspaceId: input.workspaceId, parentId: input.categoryId },
         tx,
       )
+      // The children cascade with the root, so every one of them must be
+      // deletable too: a locked subcategory blocks deleting its parent.
+      await assertDeletable({
+        workspaceId: input.workspaceId,
+        resourceKind: "productCategory",
+        resourceIds: [input.categoryId, ...children.map(({ id }) => id)],
+        tx,
+      })
       // Deactivate first: deleting clears each code's category, after which
       // they could no longer be told apart from codes that never had one.
       await discountCodeRepository.deactivateByCategoryIds(

@@ -45,6 +45,8 @@ export const DefaultJobAction = {
   syncExternalCalendarEvent: "syncExternalCalendarEvent",
   sendAppointmentReminder: "sendAppointmentReminder",
   installTemplate: "installTemplate",
+  syncTemplateInstallation: "syncTemplateInstallation",
+  fanOutTemplateUpdate: "fanOutTemplateUpdate",
   syncWelcomeMessageFlows: "syncWelcomeMessageFlows",
   deleteWelcomeMessageFlows: "deleteWelcomeMessageFlows",
   processInboundWebhookRequest: "processInboundWebhookRequest",
@@ -286,6 +288,75 @@ export type JobInstallTemplate = {
   }
 }
 
+export type JobSyncTemplateInstallation = {
+  type: typeof DefaultJobAction.syncTemplateInstallation
+  data: {
+    syncId: string
+    workspaceId: string
+  }
+}
+
+export type JobFanOutTemplateUpdate = {
+  type: typeof DefaultJobAction.fanOutTemplateUpdate
+  data: {
+    templateId: string
+    /** The publisher's workspace. */
+    workspaceId: string
+    version: number
+    /** Keyset cursor of the next batch of installations. */
+    afterId?: string | null
+  }
+}
+
+/** The sync row is the outbox, like the installation row; see `enqueueInstallTemplate`. */
+export const enqueueSyncTemplateInstallation = async (
+  data: JobSyncTemplateInstallation["data"],
+): Promise<void> => {
+  await defaultQueue.add(
+    DefaultJobAction.syncTemplateInstallation,
+    { type: DefaultJobAction.syncTemplateInstallation, data },
+    {
+      jobId: `tpl-sync-${data.syncId}`,
+      removeOnComplete: true,
+      removeOnFail: true,
+    },
+  )
+}
+
+/** One batch of the auto-update fan-out; the job id is per template, version and batch. */
+export const enqueueFanOutTemplateUpdate = async (
+  data: JobFanOutTemplateUpdate["data"],
+): Promise<void> => {
+  await defaultQueue.add(
+    DefaultJobAction.fanOutTemplateUpdate,
+    { type: DefaultJobAction.fanOutTemplateUpdate, data },
+    {
+      jobId: `tpl-fanout-${data.templateId}-${data.version}-${data.afterId ?? "first"}`,
+      removeOnComplete: true,
+      removeOnFail: true,
+    },
+  )
+}
+
+/**
+ * The installation row is the outbox, so the job carries nothing worth
+ * keeping once it finishes or fails: a retained job would make the sweep's
+ * next `add()` with the same deterministic id a silent no-op.
+ */
+export const enqueueInstallTemplate = async (
+  data: JobInstallTemplate["data"],
+): Promise<void> => {
+  await defaultQueue.add(
+    DefaultJobAction.installTemplate,
+    { type: DefaultJobAction.installTemplate, data },
+    {
+      jobId: `install-template-${data.installationId}`,
+      removeOnComplete: true,
+      removeOnFail: true,
+    },
+  )
+}
+
 /**
  * Mirror a flow's published start node (or just its name, for `rename`) to a
  * Meta welcome message flow on every Messenger page of the workspace.
@@ -411,3 +482,5 @@ export type DefaultJobData =
   | JobSyncExternalCalendarEvent
   | JobSendAppointmentReminder
   | JobInstallTemplate
+  | JobSyncTemplateInstallation
+  | JobFanOutTemplateUpdate

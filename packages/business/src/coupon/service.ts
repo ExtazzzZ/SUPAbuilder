@@ -10,6 +10,12 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz"
 import { BaseService } from "../base.service"
 import { type ContactAccessScope, contactService } from "../contact/service"
 import { ChatbotXException, notFoundException } from "../errors"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 
 export type CouponImportBatchResult = {
   processed: number
@@ -249,13 +255,38 @@ class CouponService extends BaseService {
             rejectPast: false,
           })
 
-    const topic = await couponRepository.updateTopic({
-      workspaceId: input.workspaceId,
-      topicId: input.topicId,
-      name,
-      description,
-      expiresAt,
-    })
+    // The topic is locked before its stored row is read, so the diff that
+    // decides the guard is computed under the lock.
+    const topic = await withTemplateLockedTransaction(
+      async (tx) => {
+        const stored = await couponRepository.findTopic(
+          { workspaceId: input.workspaceId, topicId: input.topicId },
+          tx,
+        )
+        if (!stored) {
+          throw notFoundException("Coupon topic not found")
+        }
+        // Only what actually changes counts: a form re-submits every field.
+        await assertResourceEditable({
+          workspaceId: input.workspaceId,
+          resourceKind: "couponTopic",
+          resourceIds: [input.topicId],
+          changedKeys: changedKeysOf(stored, { name, description, expiresAt }),
+          tx,
+        })
+        return await couponRepository.updateTopic(
+          {
+            workspaceId: input.workspaceId,
+            topicId: input.topicId,
+            name,
+            description,
+            expiresAt,
+          },
+          tx,
+        )
+      },
+      { initialKeys: [{ kind: "couponTopic", resourceId: input.topicId }] },
+    )
     if (!topic) {
       throw notFoundException("Coupon topic not found")
     }
@@ -288,6 +319,11 @@ class CouponService extends BaseService {
   }
 
   async deleteTopic(input: { workspaceId: string; topicId: string }) {
+    await assertDeletable({
+      workspaceId: input.workspaceId,
+      resourceKind: "couponTopic",
+      resourceIds: [input.topicId],
+    })
     const topic = await couponRepository.softDeleteTopic(input)
     if (!topic) {
       throw notFoundException("Archived coupon topic not found")
@@ -573,6 +609,11 @@ class CouponService extends BaseService {
       )
     }
     return expiresAt
+  }
+
+  /** Drops the workspace's cached topic data; for writers that bypass this service (template installs). */
+  invalidate(workspaceId: string) {
+    return this.invalidateCacheTags(this.cacheTag(workspaceId))
   }
 
   private cacheTag(workspaceId: string) {

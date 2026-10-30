@@ -16,7 +16,12 @@ import { createId } from "@chatbotx.io/utils"
 import { isSameJsonValue } from "../audit/diff"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import type { PaginatedResult } from "../types"
 
 type FindByProps = {
@@ -178,8 +183,38 @@ class AiFunctionService extends BaseService {
     ctx: { workspaceId: string; id: string },
     data: UpdateAIFunctionRequest,
     tx?: DatabaseClient,
-  ) {
-    const client = tx ?? db
+  ): Promise<AIFunctionModel[]> {
+    if (!tx) {
+      // The function and its trigger flow are locked before the stored row is
+      // read, so the diff that decides the guard is computed under the lock.
+      return await withTemplateLockedTransaction(
+        (lockedTx) => this.update(ctx, data, lockedTx),
+        {
+          initialKeys: [
+            { kind: "aiFunction", resourceId: ctx.id },
+            ...(data.triggerFlowId
+              ? [{ kind: "flow" as const, resourceId: data.triggerFlowId }]
+              : []),
+          ],
+        },
+      )
+    }
+    const client = tx
+    const existing = await client.query.aiFunctionModel.findFirst({
+      where: { id: ctx.id, workspaceId: ctx.workspaceId },
+    })
+    if (existing) {
+      await assertResourceEditable({
+        workspaceId: ctx.workspaceId,
+        resourceKind: "aiFunction",
+        resourceIds: [ctx.id],
+        changedKeys: changedKeysOf(existing, data),
+        referencedParents: data.triggerFlowId
+          ? [{ kind: "flow", resourceId: data.triggerFlowId }]
+          : [],
+        tx,
+      })
+    }
     return await client
       .update(aiFunctionModel)
       .set(data)
@@ -193,6 +228,12 @@ class AiFunctionService extends BaseService {
   }
 
   async delete(ctx: { workspaceId: string; id: string }, tx?: DatabaseClient) {
+    await assertDeletable({
+      workspaceId: ctx.workspaceId,
+      resourceKind: "aiFunction",
+      resourceIds: [ctx.id],
+      tx,
+    })
     const client = tx ?? db
     return await client
       .delete(aiFunctionModel)

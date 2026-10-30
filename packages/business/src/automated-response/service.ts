@@ -25,7 +25,12 @@ import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { flowService } from "../flow/service"
 import { folderService } from "../folder/service"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import type { PaginatedResult } from "../types"
 
 export type UpdateAutomatedResponseRequest = {
@@ -265,7 +270,41 @@ class AutomatedResponseService extends BaseService {
     data: UpdateAutomatedResponseRequest,
     tx?: DatabaseClient,
   ): Promise<AutomatedResponseModel> {
-    const client = tx ?? db
+    if (tx) {
+      const { updated } = await this.updateIn(ctx, data, tx)
+      await this.invalidateCache(ctx.workspaceId)
+      return updated
+    }
+    // The row and its flow are locked before the stored row is read, so the
+    // diff that decides the guard is computed under the lock; the cache and the
+    // audit follow the commit.
+    const { updated, changed } = await withTemplateLockedTransaction(
+      (lockedTx) => this.updateIn(ctx, data, lockedTx),
+      {
+        initialKeys: [
+          { kind: "automatedResponse", resourceId: ctx.id },
+          ...(data.flowId
+            ? [{ kind: "flow" as const, resourceId: data.flowId }]
+            : []),
+        ],
+      },
+    )
+    await this.invalidateCache(ctx.workspaceId)
+    if (changed) {
+      await this.audit(
+        "update",
+        `updated a keyword automation (#${updated.id})`,
+      )
+    }
+    return updated
+  }
+
+  private async updateIn(
+    ctx: { id: string; workspaceId: string; type: AutomatedResponseType },
+    data: UpdateAutomatedResponseRequest,
+    tx: DatabaseClient,
+  ): Promise<{ updated: AutomatedResponseModel; changed: boolean }> {
+    const client = tx
 
     // Fetched before the write so a Save that resubmits identical values
     // doesn't produce an "updated" audit entry.
@@ -277,6 +316,21 @@ class AutomatedResponseService extends BaseService {
       },
       columns: { folderId: true, keywords: true, text: true, flowId: true },
     })
+
+    // Keywords, reply text and flow are template content; the status toggle
+    // and the folder are the installer's.
+    if (existing) {
+      await assertResourceEditable({
+        workspaceId: ctx.workspaceId,
+        resourceKind: "automatedResponse",
+        resourceIds: [ctx.id],
+        changedKeys: changedKeysOf(existing, data),
+        referencedParents: data.flowId
+          ? [{ kind: "flow", resourceId: data.flowId }]
+          : [],
+        tx,
+      })
+    }
 
     // `text` and `flowId` are mutually exclusive: setting one nulls the
     // other, mirroring `create`'s behavior. Validate `flowId` belongs to
@@ -321,7 +375,6 @@ class AutomatedResponseService extends BaseService {
         ),
       )
       .returning()
-    await this.invalidateCache(ctx.workspaceId)
 
     if (!updated) {
       throw notFoundException("Automated response not found")
@@ -341,14 +394,8 @@ class AutomatedResponseService extends BaseService {
       (nextFlowId !== undefined && nextFlowId !== existing.flowId) ||
       keywordsChanged
 
-    if (!tx && changed) {
-      await this.audit(
-        "update",
-        `updated a keyword automation (#${updated.id})`,
-      )
-    }
-
-    return updated
+    // An open transaction owner audits (or not) itself, as before.
+    return { updated, changed }
   }
 
   async setStatus(
@@ -399,11 +446,15 @@ class AutomatedResponseService extends BaseService {
     ids: string[],
     type: AutomatedResponseType,
     tx?: DatabaseClient,
+    /** An uninstall passes its own installations: their locks stop governing once it commits. */
+    context?: { excludeInstallationIds?: readonly string[] },
   ): Promise<void> {
     await assertDeletable({
       workspaceId,
       resourceKind: "automatedResponse",
       resourceIds: ids,
+      tx,
+      excludeInstallationIds: context?.excludeInstallationIds,
     })
 
     const client = tx ?? db

@@ -12,6 +12,7 @@ import {
   type FlowListInput,
   flowRepository,
   integrationWhatsappRepository,
+  reflinkRepository,
   whatsappMessageTemplateRepository,
 } from "@chatbotx.io/database/repositories"
 import {
@@ -22,25 +23,44 @@ import {
 import type { FlowModel, FlowVersionModel } from "@chatbotx.io/database/types"
 import { parsePagination } from "@chatbotx.io/database/utils"
 import {
+  collectFieldReferences,
   type EdgeSchema,
+  FLOW_EXPORT_FORMAT_VERSION,
   type FlowExportBotField,
   type FlowExportCustomField,
   type FlowVersionSchema,
+  flowExportSchema,
+  referenceKindsWithPolicy,
   remapFlowGraphReferences,
+  STRIP_UNRESOLVED_ARRAY_REFERENCE_KINDS,
   sendMessageNodeDefaultFn,
   stepTypes,
+  type UnresolvedReference,
 } from "@chatbotx.io/flow-config"
 import { createId } from "@chatbotx.io/utils"
 import { customFieldResolutionKey } from "@chatbotx.io/utils/custom-field"
 import { BaseService } from "../base.service"
 import { botFieldService } from "../bot-field/service"
-import { customFieldService } from "../custom-field/service"
-import { notFoundException } from "../errors"
+import {
+  customFieldService,
+  type ResolvedCustomField,
+} from "../custom-field/service"
+import { notFoundException, validationException } from "../errors"
 import { assertFlowGraphPublishable, flowVersionService } from "../flow-version"
 import { folderService } from "../folder/service"
+import { copyNamePrefix, freeCopyNames } from "../lib/copy-name"
 import { messengerWelcomeMessageFlowService } from "../messenger-welcome-message-flow/service"
 import { type IdLabel, selectLabelsByIds } from "../select-labels-by-ids"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  computeCustomFieldNameBindings,
+  rewriteFieldTokensDeep,
+} from "../template/field-token-binder"
+import {
+  assertDeletable,
+  assertResourceEditable,
+} from "../template/installed-resource.service"
+import { sanitizeUnresolvedReferences } from "../template/reference-sanitizer"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import {
   type FlowWithNodeVersions,
   filterFlowsByStartStepType,
@@ -53,7 +73,12 @@ type ResolveFieldsByNameAndType = (props: {
   workspaceId: string
   fields: FieldManifestEntry[]
   tx?: DatabaseClient
-}) => Promise<{ idMap: Map<string, string>; createdIds: string[] }>
+}) => Promise<{
+  idMap: Map<string, string>
+  createdIds: string[]
+  /** Present for custom fields: the exact target name each field resolved to. */
+  resolved?: Map<string, ResolvedCustomField>
+}>
 
 /**
  * Resolves a `{ sourceId: manifestEntry }` import manifest (customField or
@@ -68,9 +93,17 @@ const resolveManifestIdMap = async (
   resolve: ResolveFieldsByNameAndType,
   workspaceId: string,
   tx: DatabaseClient,
-): Promise<{ idMap: Map<string, string>; createdIds: string[] }> => {
+): Promise<{
+  idMap: Map<string, string>
+  createdIds: string[]
+  resolved: Map<string, ResolvedCustomField> | undefined
+}> => {
   const entries = Object.entries(manifest)
-  const { idMap: resolvedByKey, createdIds } = await resolve({
+  const {
+    idMap: resolvedByKey,
+    createdIds,
+    resolved,
+  } = await resolve({
     workspaceId,
     fields: entries.map(([, field]) => field),
     tx,
@@ -83,8 +116,35 @@ const resolveManifestIdMap = async (
     }),
   )
 
-  return { idMap, createdIds }
+  return { idMap, createdIds, resolved }
 }
+
+/**
+ * What a single-flow import remaps or reports. Manifest kinds are resolved from
+ * the file's own field manifests; members and teams are always stripped; every
+ * `verifyInTarget` kind is reported so the sanitizer keeps only the ids that
+ * exist in the importing workspace, and so are the natural-key kinds with no
+ * manifest here (tags, pipelines, folders, product categories).
+ */
+/**
+ * Natural-key kinds a single-flow import has no manifest for. Their ids are
+ * verified against the importing workspace instead of being left as the file
+ * wrote them (a foreign tag id would otherwise travel into the new flow).
+ */
+const FLOW_IMPORT_VERIFIED_KINDS: ReadonlySet<string> = new Set([
+  "tag",
+  "pipeline",
+  "folder",
+  "productCategory",
+])
+
+const flowImportReferenceKinds = (): string[] => [
+  "customField",
+  "botField",
+  ...FLOW_IMPORT_VERIFIED_KINDS,
+  ...STRIP_UNRESOLVED_ARRAY_REFERENCE_KINDS,
+  ...referenceKindsWithPolicy("verifyInTarget"),
+]
 
 /** `flows.create`'s default content when no `spec`/`nodes` is supplied: today's single "Send Message" start node. */
 const defaultDraftGraph = (): {
@@ -122,6 +182,19 @@ const readNodeLabel = (node: { id: string; data?: unknown }): string => {
     }
   }
   return node.id
+}
+
+/** Flow copies are named `<name> _copy`, `<name> _copy 2`, … (names are not unique, but copies stay distinguishable). */
+const FLOW_COPY_NAME = { style: "underscore", maxLength: 255 } as const
+
+const toExportFileName = (name: string): string => {
+  const slug =
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "flow"
+  return `${slug}.chatbotx-flow.json`
 }
 
 class FlowService extends BaseService {
@@ -322,6 +395,8 @@ class FlowService extends BaseService {
   private async insertFlowWithDraft(
     tx: DatabaseClient,
     input: {
+      /** Minted when absent; a duplicate needs it before inserting to remap self-references. */
+      id?: string
       name: string
       active: boolean
       enableInInbox: boolean
@@ -330,10 +405,17 @@ class FlowService extends BaseService {
       startNodeId: string
       nodes: FlowVersionModel["nodes"]
       edges: FlowVersionModel["edges"]
+      /** When set, a published version with this graph is stored next to the draft. */
+      published?: {
+        startNodeId: string
+        nodes: FlowVersionModel["nodes"]
+        edges: FlowVersionModel["edges"]
+      }
     },
   ): Promise<string> {
-    const newFlowId = createId()
+    const newFlowId = input.id ?? createId()
     const draftVersionId = createId()
+    const publishedVersionId = input.published ? createId() : null
     await tx.insert(flowModel).values({
       id: newFlowId,
       name: input.name,
@@ -341,7 +423,7 @@ class FlowService extends BaseService {
       enableInInbox: input.enableInInbox,
       workspaceId: input.workspaceId,
       folderId: input.folderId,
-      currentVersionId: null,
+      currentVersionId: publishedVersionId,
       draftVersionId,
     })
     await tx.insert(flowAnalyticsSessionModel).values({
@@ -359,6 +441,18 @@ class FlowService extends BaseService {
       isLatest: false,
       startNodeId: input.startNodeId,
     })
+    if (input.published && publishedVersionId) {
+      await tx.insert(flowVersionModel).values({
+        id: publishedVersionId,
+        workspaceId: input.workspaceId,
+        flowId: newFlowId,
+        nodes: input.published.nodes,
+        edges: input.published.edges,
+        isDraft: false,
+        isLatest: true,
+        startNodeId: input.published.startNodeId,
+      })
+    }
 
     return newFlowId
   }
@@ -561,23 +655,40 @@ class FlowService extends BaseService {
     ctx: { workspaceId: string; id: string },
     data: { name?: string; active?: boolean; enableInInbox?: boolean },
   ): Promise<void> {
-    const flow = await this.findBy(ctx)
-    if (!flow) {
-      throw notFoundException("Flow not found")
-    }
+    // The flow is locked before its stored row is read, so the diff that
+    // decides the guard is computed under the lock.
+    const { flow, updated } = await withTemplateLockedTransaction(
+      async (tx) => {
+        const current = await this.findBy(ctx, tx)
+        if (!current) {
+          throw notFoundException("Flow not found")
+        }
 
-    const hasChanges = Object.entries(data).some(
-      ([key, value]) => flow[key as keyof typeof data] !== value,
+        const changedKeys = Object.keys(data).filter(
+          (key) =>
+            current[key as keyof typeof data] !==
+            data[key as keyof typeof data],
+        )
+        if (changedKeys.length === 0) {
+          return { flow: current, updated: [] as { id: string }[] }
+        }
+
+        await assertResourceEditable({
+          workspaceId: ctx.workspaceId,
+          resourceKind: "flow",
+          resourceIds: [current.id],
+          changedKeys,
+          tx,
+        })
+        const rows = await tx
+          .update(flowModel)
+          .set(data)
+          .where(eq(flowModel.id, current.id))
+          .returning({ id: flowModel.id })
+        return { flow: current, updated: rows }
+      },
+      { initialKeys: [{ kind: "flow", resourceId: ctx.id }] },
     )
-    if (!hasChanges) {
-      return
-    }
-
-    const updated = await db
-      .update(flowModel)
-      .set(data)
-      .where(eq(flowModel.id, flow.id))
-      .returning({ id: flowModel.id })
 
     if (updated.length === 0) {
       return
@@ -594,35 +705,96 @@ class FlowService extends BaseService {
     await this.audit("update", `updated a flow (#${flow.id})`)
   }
 
-  duplicate(input: { workspaceId: string; id: string }): Promise<string> {
-    return db.transaction(async (tx) => {
+  /**
+   * Copies a flow inside its workspace. The copy's draft is the source's
+   * draft; when the source has a published version the copy gets one too (and
+   * keeps `active`), otherwise it is a draft-only flow that starts inactive.
+   * References a graph holds to the source flow itself point at the copy.
+   * The name is the first free `<name> _copy`, `<name> _copy 2`, … .
+   */
+  async duplicate(input: { workspaceId: string; id: string }): Promise<string> {
+    const newFlowId = await db.transaction(async (tx) => {
       const flow = await this.findBy(input, tx)
       if (!flow) {
         throw notFoundException("Flow not found")
       }
 
-      const draftVersion = await flowVersionService.findDraft(
-        {
-          flowId: flow.id,
-          workspaceId: flow.workspaceId,
-        },
-        tx,
-      )
+      const ref = { flowId: flow.id, workspaceId: flow.workspaceId }
+      const [draftVersion, publishedVersion] = await Promise.all([
+        flowVersionService.findDraft(ref, tx),
+        flowVersionService.findPublished(ref, tx),
+      ])
       if (!draftVersion) {
         throw notFoundException("Draft version not found")
       }
 
-      return this.insertFlowWithDraft(tx, {
-        name: `${flow.name} _copy`,
-        active: flow.active,
+      const taken = new Set(
+        await flowRepository.listNamesWithPrefix(
+          {
+            workspaceId: flow.workspaceId,
+            prefix: copyNamePrefix(flow.name, FLOW_COPY_NAME),
+          },
+          tx,
+        ),
+      )
+      const name = freeCopyNames(flow.name, taken, FLOW_COPY_NAME)[0]
+      if (!name) {
+        throw validationException("name", "Name is already taken")
+      }
+
+      const id = createId()
+      const pointAtCopy = <T extends { nodes: unknown; edges: unknown }>(
+        graph: T,
+      ): T =>
+        remapFlowGraphReferences(
+          graph,
+          { flow: new Map([[flow.id, id]]) },
+          { kinds: ["flow"] },
+        )
+      const draft = pointAtCopy({
+        nodes: draftVersion.nodes,
+        edges: draftVersion.edges,
+      })
+      const published = publishedVersion
+        ? pointAtCopy({
+            nodes: publishedVersion.nodes,
+            edges: publishedVersion.edges,
+          })
+        : undefined
+
+      return await this.insertFlowWithDraft(tx, {
+        id,
+        name,
+        active: publishedVersion ? flow.active : false,
         enableInInbox: flow.enableInInbox,
         workspaceId: flow.workspaceId,
         folderId: flow.folderId,
         startNodeId: draftVersion.startNodeId,
-        nodes: draftVersion.nodes,
-        edges: draftVersion.edges,
+        nodes: draft.nodes,
+        edges: draft.edges,
+        published:
+          publishedVersion && published
+            ? {
+                startNodeId: publishedVersion.startNodeId,
+                nodes: published.nodes,
+                edges: published.edges,
+              }
+            : undefined,
       })
     })
+    // The copy may carry a published version the versions list cached as empty.
+    await flowVersionService.invalidateList(newFlowId)
+    // A published copy is live, so its welcome-message flows sync like any publish.
+    await messengerWelcomeMessageFlowService.enqueueSync({
+      workspaceId: input.workspaceId,
+      flowId: newFlowId,
+      reason: "publish",
+    })
+    await this.audit(
+      "create",
+      `duplicated a flow (#${input.id} → #${newFlowId})`,
+    )
+    return newFlowId
   }
 
   /**
@@ -647,6 +819,8 @@ class FlowService extends BaseService {
     folderId?: string | null
     tx?: DatabaseClient
     validatePublishable?: boolean
+    /** Also stores a published version with the same graph (the caller has checked it is publishable). */
+    publishedToo?: boolean
   }): Promise<string> {
     if (input.validatePublishable ?? true) {
       assertFlowGraphPublishable({ nodes: input.nodes, edges: input.edges })
@@ -662,8 +836,97 @@ class FlowService extends BaseService {
         startNodeId: input.startNodeId,
         nodes: input.nodes,
         edges: input.edges,
+        published: input.publishedToo
+          ? {
+              startNodeId: input.startNodeId,
+              nodes: input.nodes,
+              edges: input.edges,
+            }
+          : undefined,
       })
     return input.tx ? run(input.tx) : db.transaction(run)
+  }
+
+  /**
+   * The portable export of one flow: its published graph (or the draft, with
+   * `version: "draft"`) plus the name and type of every custom and bot field
+   * it references, so another workspace can bind them by name. Shared by the
+   * download route and the public API.
+   *
+   * `notPublished` means the flow has no published version to export;
+   * `notFound` that the flow is not in the workspace.
+   */
+  async buildExport(input: {
+    workspaceId: string
+    id: string
+    version?: "published" | "draft"
+  }): Promise<
+    | { ok: true; fileName: string; envelope: Record<string, unknown> }
+    | { ok: false; reason: "notFound" | "notPublished" | "noDraft" }
+  > {
+    const flow = await this.findBy({
+      workspaceId: input.workspaceId,
+      id: input.id,
+    })
+    if (!flow) {
+      return { ok: false, reason: "notFound" }
+    }
+    const ref = { flowId: flow.id, workspaceId: flow.workspaceId }
+    const version =
+      input.version === "draft"
+        ? await flowVersionService.findDraft(ref)
+        : await flowVersionService.findPublished(ref)
+    if (!version) {
+      return {
+        ok: false,
+        reason: input.version === "draft" ? "noDraft" : "notPublished",
+      }
+    }
+
+    const { customFieldIds, botFieldIds } = collectFieldReferences({
+      nodes: version.nodes,
+      edges: version.edges,
+    })
+    const [customFieldRows, botFieldRows] = await Promise.all([
+      customFieldService.findManyByIds({
+        workspaceId: flow.workspaceId,
+        ids: customFieldIds,
+      }),
+      botFieldService.findManyByIds({
+        workspaceId: flow.workspaceId,
+        ids: botFieldIds,
+      }),
+    ])
+    const envelope = {
+      formatVersion: FLOW_EXPORT_FORMAT_VERSION,
+      exportedAt: new Date().toISOString(),
+      source: { workspaceId: flow.workspaceId, flowId: flow.id },
+      flows: [
+        {
+          name: flow.name,
+          active: flow.active,
+          enableInInbox: flow.enableInInbox,
+          startNodeId: version.startNodeId,
+          nodes: version.nodes,
+          edges: version.edges,
+        },
+      ],
+      customFields: Object.fromEntries(
+        customFieldRows.map((row): [string, FlowExportCustomField] => [
+          row.id,
+          { name: row.name, type: row.type },
+        ]),
+      ),
+      botFields: Object.fromEntries(
+        botFieldRows.map((row): [string, FlowExportBotField] => [
+          row.id,
+          { name: row.name, type: row.type },
+        ]),
+      ),
+    }
+    // Never emit a payload the importer would reject.
+    flowExportSchema.parse(envelope)
+    return { ok: true, fileName: toExportFileName(flow.name), envelope }
   }
 
   /**
@@ -689,21 +952,24 @@ class FlowService extends BaseService {
     customFields: Record<string, FlowExportCustomField>
     botFields: Record<string, FlowExportBotField>
     folderId?: string | null
-    /** Workspace the export came from; same-workspace imports keep member/team ids. */
-    sourceWorkspaceId?: string
   }): Promise<{
     flowId: string
     createdCustomFieldIds: string[]
     createdBotFieldIds: string[]
+    /** Custom fields created under another name because their own was taken by another type. */
+    renamedCustomFields: { from: string; to: string; type: string }[]
   }> {
     return await db.transaction(async (tx) => {
-      const { idMap: customFieldIdMap, createdIds } =
-        await resolveManifestIdMap(
-          input.customFields,
-          (props) => customFieldService.resolveByNameAndType(props),
-          input.workspaceId,
-          tx,
-        )
+      const {
+        idMap: customFieldIdMap,
+        createdIds,
+        resolved: resolvedCustomFields,
+      } = await resolveManifestIdMap(
+        input.customFields,
+        (props) => customFieldService.resolveByNameAndType(props),
+        input.workspaceId,
+        tx,
+      )
 
       const { idMap: botFieldIdMap, createdIds: createdBotFieldIds } =
         await resolveManifestIdMap(
@@ -713,18 +979,40 @@ class FlowService extends BaseService {
           tx,
         )
 
+      // Workspace members and teams never travel between workspaces, and the
+      // file's own `source.workspaceId` is forgeable, so it is never used to
+      // decide that they may stay: they are always reported and stripped.
+      // A field reused under another spelling, or created under a renamed
+      // name, is addressed by `{{name}}` in the flow's text: the tokens follow.
+      const { bindings, renamed } = computeCustomFieldNameBindings(
+        Object.entries(input.customFields).map(([sourceId, field]) => ({
+          sourceId,
+          name: field.name,
+          type: field.type,
+          target: resolvedCustomFields?.get(customFieldResolutionKey(field)),
+        })),
+      )
+      const unresolved: UnresolvedReference[] = []
       const remapped = remapFlowGraphReferences(
-        { nodes: input.nodes, edges: input.edges },
+        rewriteFieldTokensDeep(
+          { nodes: input.nodes, edges: input.edges },
+          bindings,
+        ),
         { customField: customFieldIdMap, botField: botFieldIdMap },
         {
-          // Pipeline assignees are workspace-specific: stripped when the export
-          // came from another workspace, kept when it is the same one.
-          kinds:
-            input.sourceWorkspaceId === input.workspaceId
-              ? ["customField", "botField"]
-              : ["customField", "botField", "workspaceMember", "inboxTeam"],
+          kinds: flowImportReferenceKinds(),
+          onUnresolved: (ref) => unresolved.push(ref),
         },
       )
+      // A reference no map resolved is never left pointing at another
+      // workspace's id, whatever the uploaded file claims.
+      const graph = await sanitizeUnresolvedReferences({
+        workspaceId: input.workspaceId,
+        graph: remapped,
+        unresolved,
+        tx,
+        verifyKinds: FLOW_IMPORT_VERIFIED_KINDS,
+      })
 
       const requestedFolderId =
         !input.folderId || input.folderId === rootFolderId
@@ -746,8 +1034,8 @@ class FlowService extends BaseService {
         active: input.active,
         enableInInbox: input.enableInInbox,
         startNodeId: input.startNodeId,
-        nodes: remapped.nodes,
-        edges: remapped.edges,
+        nodes: graph.nodes,
+        edges: graph.edges,
         folderId: resolvedFolderId,
         tx,
       })
@@ -756,6 +1044,11 @@ class FlowService extends BaseService {
         flowId,
         createdCustomFieldIds: createdIds,
         createdBotFieldIds,
+        renamedCustomFields: renamed.map(({ from, to, type }) => ({
+          from,
+          to,
+          type,
+        })),
       }
     })
   }
@@ -781,6 +1074,15 @@ class FlowService extends BaseService {
       workspaceId: input.workspaceId,
       resourceKind: "flow",
       resourceIds: flowIds,
+    })
+    // Deleting a flow cascades to the ref links and QR codes pointing at it.
+    await assertDeletable({
+      workspaceId: input.workspaceId,
+      resourceKind: "reflink",
+      resourceIds: await reflinkRepository.listIdsByFlowIds({
+        workspaceId: input.workspaceId,
+        flowIds,
+      }),
     })
 
     await db.transaction(async (tx) => {

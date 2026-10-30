@@ -2,15 +2,21 @@ import type { PgTable } from "drizzle-orm/pg-core"
 import { type DatabaseClient, db, relationsFilterToSQL } from "../../client"
 import {
   aiAgentModel,
+  aiFileModel,
   aiFunctionModel,
+  aiMCPServerModel,
   appointmentCalendarModel,
   automatedResponseModel,
   commentAutomationModel,
+  couponTopicModel,
   customFieldModel,
   flowModel,
   integrationWebchatModel,
+  pipelineModel,
   productModel,
+  questionnaireModel,
   reflinkModel,
+  sequenceModel,
   tagModel,
   triggerModel,
 } from "../../schema"
@@ -21,6 +27,8 @@ const ALL_IDS_CAP = 1000
 export type SelectableResourceRow = {
   id: string
   name: string
+  /** A short label shown next to the row, e.g. the channel of a comment automation. */
+  badge?: string
 }
 
 export type ListSelectableResourceRowsResult = {
@@ -55,15 +63,22 @@ function findAllQuery<TTable extends PgTable>(
   tableQuery: {
     findMany: (args: {
       where: Record<string, unknown>
-      columns: { id: true; name: true }
+      columns: Record<string, true>
       limit: number
       offset: number
-      orderBy: { name: "asc" }
-    }) => Promise<{ id: string; name: string }[]>
+      orderBy: { name: "asc"; id: "asc" }
+    }) => Promise<({ id: string; name: string } & Record<string, unknown>)[]>
   },
   table: TTable,
   extraWhere?: Record<string, unknown>,
+  /** A text column to surface as each row's `badge`. */
+  badgeColumn?: string,
 ) {
+  const columns: Record<string, true> = {
+    id: true,
+    name: true,
+    ...(badgeColumn ? { [badgeColumn]: true } : {}),
+  }
   return async (
     input: CategoryInput,
     tx: DatabaseClient = db,
@@ -78,10 +93,10 @@ function findAllQuery<TTable extends PgTable>(
     const [rows, total] = await Promise.all([
       tableQuery.findMany({
         where,
-        columns: { id: true, name: true },
+        columns,
         limit,
         offset,
-        orderBy: { name: "asc" },
+        orderBy: { name: "asc", id: "asc" },
       }),
       tx.$count(table, relationsFilterToSQL(table, where)),
     ])
@@ -93,12 +108,22 @@ function findAllQuery<TTable extends PgTable>(
           columns: { id: true, name: true },
           limit: ALL_IDS_CAP,
           offset: 0,
-          orderBy: { name: "asc" },
+          orderBy: { name: "asc", id: "asc" },
         })
       ).map((row) => row.id),
     )
 
-    return { rows, total, allIds }
+    return {
+      rows: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        ...(badgeColumn && typeof row[badgeColumn] === "string"
+          ? { badge: row[badgeColumn] }
+          : {}),
+      })),
+      total,
+      allIds,
+    }
   }
 }
 
@@ -138,10 +163,34 @@ export const templateSelectableResourceRepository = {
     findAllQuery(tx.query.triggerModel, triggerModel)(input, tx),
 
   listFbCommentAutomations: (input: CategoryInput, tx: DatabaseClient = db) =>
-    findAllQuery(tx.query.commentAutomationModel, commentAutomationModel)(
-      input,
-      tx,
-    ),
+    findAllQuery(
+      tx.query.commentAutomationModel,
+      commentAutomationModel,
+      undefined,
+      "type",
+    )(input, tx),
+
+  listAIFiles: (input: CategoryInput, tx: DatabaseClient = db) =>
+    findAllQuery(tx.query.aiFileModel, aiFileModel)(input, tx),
+
+  listAIMcpServers: (input: CategoryInput, tx: DatabaseClient = db) =>
+    findAllQuery(tx.query.aiMCPServerModel, aiMCPServerModel)(input, tx),
+
+  listQuestionnaires: (input: CategoryInput, tx: DatabaseClient = db) =>
+    findAllQuery(tx.query.questionnaireModel, questionnaireModel, {
+      deletedAt: { isNull: true as const },
+    })(input, tx),
+
+  listCouponTopics: (input: CategoryInput, tx: DatabaseClient = db) =>
+    findAllQuery(tx.query.couponTopicModel, couponTopicModel, {
+      deletedAt: { isNull: true as const },
+    })(input, tx),
+
+  listPipelines: (input: CategoryInput, tx: DatabaseClient = db) =>
+    findAllQuery(tx.query.pipelineModel, pipelineModel)(input, tx),
+
+  listSequences: (input: CategoryInput, tx: DatabaseClient = db) =>
+    findAllQuery(tx.query.sequenceModel, sequenceModel)(input, tx),
 
   listEntryPointLinks: (input: CategoryInput, tx: DatabaseClient = db) =>
     findAllQuery(tx.query.reflinkModel, reflinkModel)(input, tx),
@@ -182,7 +231,7 @@ export const templateSelectableResourceRepository = {
         columns: { id: true, text: true, keywords: true },
         limit,
         offset,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "desc", id: "desc" },
       }),
       tx.$count(
         automatedResponseModel,

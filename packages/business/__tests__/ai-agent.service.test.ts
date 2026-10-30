@@ -44,8 +44,10 @@ const {
         findMany: mockTemplateInstalledResourceFindMany,
       },
     },
+    // A fresh client per transaction, like a real driver: the template lock
+    // registry is keyed by it.
     transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
-      callback(dbClient),
+      callback({ ...dbClient, execute: vi.fn() }),
     ),
     update: mockUpdate,
   }

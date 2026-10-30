@@ -6,6 +6,11 @@ import {
   type CreateWebchatRequest,
   integrationWebchatService,
 } from "../../integration-webchat/service"
+import {
+  EMPTY_COLLECT_RESULT,
+  updateNotSupported,
+  verifyOwnedIds,
+} from "./shared"
 import type {
   PatchTask,
   ResourceAdapter,
@@ -53,6 +58,10 @@ export const webchatsAdapter: ResourceAdapter = {
   providesKinds: [],
   consumesKinds: ["flow"],
   deferredKinds: ["flow"],
+  trackedKind: "integrationWebchat",
+  folderTypes: [],
+  minFormatVersion: 1,
+  sync: updateNotSupported("webchats"),
 
   async insert(
     ctx: TemplateInstallContext,
@@ -161,25 +170,17 @@ export const webchatsAdapter: ResourceAdapter = {
     },
 
     async verifyOwnership(workspaceId, ids) {
-      const uniqueIds = [...new Set(ids)]
-      if (uniqueIds.length === 0) {
-        return []
-      }
-      const rows = await db.query.integrationWebchatModel.findMany({
-        where: { workspaceId, id: { in: uniqueIds } },
-        columns: { id: true },
-      })
-      return rows.map((row) => row.id)
+      return await verifyOwnedIds(ids, (uniqueIds) =>
+        db.query.integrationWebchatModel.findMany({
+          where: { workspaceId, id: { in: uniqueIds } },
+          columns: { id: true },
+        }),
+      )
     },
 
     async collect(workspaceId, ids) {
       if (ids.length === 0) {
-        return {
-          entries: [],
-          folderIds: [],
-          productCategoryIds: [],
-          hardDependencies: [],
-        }
+        return EMPTY_COLLECT_RESULT
       }
       const rows = await db.query.integrationWebchatModel.findMany({
         where: { workspaceId, id: { in: [...ids] } },

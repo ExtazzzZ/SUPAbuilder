@@ -1,6 +1,31 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 // The broadcast policy import reaches quota/workspace modules these narrow mocks omit.
+// The template lock guard has its own suite; these tests cover the service.
+vi.mock("../src/template/installed-resource.service", () => ({
+  assertDeletable: vi.fn(),
+  assertResourceEditable: vi.fn(),
+  changedKeysOf: vi.fn((_existing: unknown, patch: Record<string, unknown>) =>
+    Object.keys(patch),
+  ),
+}))
+
+const mockLockOptions = vi.hoisted(() => vi.fn())
+
+// Run the locked transaction against the same mocked client the test asserts on.
+vi.mock("../src/template/template-resource-locks", async () => {
+  const { db } = await import("@chatbotx.io/database/client")
+  return {
+    withTemplateLockedTransaction: (
+      run: (tx: unknown) => unknown,
+      options?: unknown,
+    ) => {
+      mockLockOptions(options)
+      return run(db)
+    },
+  }
+})
+
 vi.mock("../src/broadcast/plan-policy.service", () => ({
   broadcastPlanPolicyService: {},
 }))
@@ -218,6 +243,33 @@ describe("qrCodeService.update", () => {
         { eq: ["reflink.type", "qrCode"] },
       ],
     })
+  })
+
+  test("locks the code and its flow before the stored row is read", async () => {
+    mocks.findFirst.mockResolvedValue({ id: "qr-1", qrStyles: null })
+    mocks.flowExists.mockResolvedValue(true)
+    const returning = vi.fn().mockResolvedValue([{ id: "qr-1" }])
+    mocks.update.mockReturnValue({
+      set: () => ({ where: () => ({ returning }) }),
+    })
+    mocks.findFirst.mockClear()
+
+    await qrCodeService.update({
+      workspaceId: "ws-1",
+      id: "qr-1",
+      data: { flowId: "flow-2" },
+      duplicateNameMessage: "Name already exists",
+    })
+
+    expect(mockLockOptions).toHaveBeenCalledWith({
+      initialKeys: [
+        { kind: "reflink", resourceId: "qr-1" },
+        { kind: "flow", resourceId: "flow-2" },
+      ],
+    })
+    expect(mockLockOptions.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.findFirst.mock.invocationCallOrder[0] as number,
+    )
   })
 
   test("rejects when flowId does not belong to the workspace", async () => {

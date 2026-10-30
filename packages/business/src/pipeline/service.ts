@@ -24,6 +24,12 @@ import { withCache } from "@chatbotx.io/redis"
 import { conflictException, notFoundException } from "../errors"
 import { type IdLabel, selectLabelsByIds } from "../select-labels-by-ids"
 import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
+import {
   type PipelineAccessScope,
   type PipelinePermissions,
   resolvePipelinePermissions,
@@ -406,6 +412,7 @@ export class PipelineService extends PipelineBaseService {
 
   async update(input: UpdatePipelineInput): Promise<PipelineWithCurrency> {
     const { workspaceId, id, values } = input
+    // Access is decided up front; the row the diff uses is read under the lock.
     await this.requireAccess({
       workspaceId,
       pipelineId: id,
@@ -413,53 +420,79 @@ export class PipelineService extends PipelineBaseService {
       action: "manageSettings",
     })
 
-    const updated = await db.transaction(async (tx) => {
-      await acquirePipelineAdvisoryLock(tx, this.namingLockKey(workspaceId))
-      const patch: PipelineUpdate = {}
-      if (values.name !== undefined) {
-        await this.assertNameFree(
-          { workspaceId, column: "name", value: values.name, exceptId: id },
-          tx,
-        )
-        patch.name = values.name
-      }
-      if (values.referenceName !== undefined) {
-        await this.assertNameFree(
-          {
-            workspaceId,
-            column: "referenceName",
-            value: values.referenceName,
-            exceptId: id,
-          },
-          tx,
-        )
-        patch.referenceName = values.referenceName
-      }
-      if (values.currency !== undefined) {
-        patch.currency = values.currency
-      }
-      if (values.settings !== undefined) {
-        const current = await pipelineRepository.findById(
+    // The pipeline is locked before its stored row is read, so the diff that
+    // decides the guard is computed under the lock.
+    const updated = await withTemplateLockedTransaction(
+      async (tx) => {
+        const existing = await pipelineRepository.findById(
           { workspaceId, id },
           tx,
         )
-        if (!current) {
+        if (!existing) {
           throw notFoundException("Pipeline not found")
         }
-        patch.settings = mergePipelineSettings(
-          current.settings,
-          values.settings,
+        // `values.settings` is a partial patch, so compare its merged result.
+        const changedKeys = changedKeysOf(existing, {
+          ...values,
+          ...(values.settings === undefined
+            ? {}
+            : {
+                settings: mergePipelineSettings(
+                  existing.settings,
+                  values.settings,
+                ),
+              }),
+        })
+        // Before the pipeline locks: a sync/restore/uninstall cannot race this
+        // local edit.
+        await assertResourceEditable({
+          workspaceId,
+          resourceKind: "pipeline",
+          resourceIds: [id],
+          changedKeys,
+          tx,
+        })
+        await acquirePipelineAdvisoryLock(tx, this.namingLockKey(workspaceId))
+        const patch: PipelineUpdate = {}
+        if (values.name !== undefined) {
+          await this.assertNameFree(
+            { workspaceId, column: "name", value: values.name, exceptId: id },
+            tx,
+          )
+          patch.name = values.name
+        }
+        if (values.referenceName !== undefined) {
+          await this.assertNameFree(
+            {
+              workspaceId,
+              column: "referenceName",
+              value: values.referenceName,
+              exceptId: id,
+            },
+            tx,
+          )
+          patch.referenceName = values.referenceName
+        }
+        if (values.currency !== undefined) {
+          patch.currency = values.currency
+        }
+        if (values.settings !== undefined) {
+          patch.settings = mergePipelineSettings(
+            existing.settings,
+            values.settings,
+          )
+        }
+        const row = await pipelineRepository.update(
+          { workspaceId, id, values: patch },
+          tx,
         )
-      }
-      const row = await pipelineRepository.update(
-        { workspaceId, id, values: patch },
-        tx,
-      )
-      if (!row) {
-        throw notFoundException("Pipeline not found")
-      }
-      return row
-    })
+        if (!row) {
+          throw notFoundException("Pipeline not found")
+        }
+        return row
+      },
+      { initialKeys: [{ kind: "pipeline", resourceId: id }] },
+    )
 
     // Open boards refetch so a new currency, label or visible feature shows
     // in every session, not only the one that saved it.
@@ -478,6 +511,12 @@ export class PipelineService extends PipelineBaseService {
       pipelineId: input.id,
       scope: input.scope,
       action: "delete",
+    })
+    // Before the drain: a locked pipeline must not lose its rows first.
+    await assertDeletable({
+      workspaceId: input.workspaceId,
+      resourceKind: "pipeline",
+      resourceIds: [input.id],
     })
     await this.drainPipelineRows(input.workspaceId, input.id)
     await db.transaction(async (tx) => {

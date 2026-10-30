@@ -1,6 +1,9 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+
+const HASHED_MEDIA_LIBRARY_PATH =
+  /^public\/space\/ws-1\/media-library\/[0-9a-f]{64}$/
 
 const {
   mockCreate,
@@ -11,6 +14,7 @@ const {
   mockListImages,
   mockSavedReplyFindMany,
   mockBotFieldFindMany,
+  mockFindByNameAndType,
   mockInsertReturning,
 } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
@@ -21,6 +25,7 @@ const {
   mockListImages: vi.fn(),
   mockSavedReplyFindMany: vi.fn(),
   mockBotFieldFindMany: vi.fn(),
+  mockFindByNameAndType: vi.fn(),
   mockInsertReturning: vi.fn(),
 }))
 
@@ -59,7 +64,11 @@ vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
 }))
 
 vi.mock("../src/bot-field/service", () => ({
-  botFieldService: { create: mockCreate },
+  botFieldService: {
+    create: mockCreate,
+    lockNames: vi.fn(),
+    findByNameAndType: mockFindByNameAndType,
+  },
 }))
 
 const buildContext = (idMaps: Record<string, Map<string, string>> = {}) => ({
@@ -74,12 +83,39 @@ const buildContext = (idMaps: Record<string, Map<string, string>> = {}) => ({
 const { settingsAdapter } = await import("../src/template/adapters/settings")
 
 describe("settingsAdapter", () => {
+  beforeEach(() => {
+    mockFindByNameAndType.mockResolvedValue(null)
+  })
+
   afterEach(() => {
     vi.clearAllMocks()
   })
 
   test("declares botField as a provided kind", () => {
     expect(settingsAdapter.providesKinds).toContain("botField")
+  })
+
+  test("reuses a same-named, same-typed bot field instead of creating a duplicate", async () => {
+    mockFindByNameAndType.mockResolvedValue({ id: "existing-id" })
+    const ctx = buildContext()
+
+    await settingsAdapter.insert(ctx, [
+      {
+        sourceId: "src-bot-field",
+        kind: "botField",
+        name: "Loyalty Points",
+        type: "number",
+        value: "42",
+        description: null,
+        folderId: null,
+      },
+    ])
+
+    expect(mockCreate).not.toHaveBeenCalled()
+    expect(ctx.idMaps.botField?.get("src-bot-field")).toBe("existing-id")
+    expect(ctx.track).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: "existing-id", wasExisting: true }),
+    )
   })
 
   test("populates ctx.idMaps.botField (sourceId -> createdId) when a bot field is created", async () => {
@@ -214,6 +250,26 @@ describe("settingsAdapter saved reply images", () => {
     } as never,
   })
 
+  // Storage copies run in the staging pre-phase; the insert only reads them.
+  const stagedInsert = async (
+    ctx: ReturnType<typeof buildTxContext>,
+    entries: Record<string, unknown>[],
+  ) => {
+    const staged = await settingsAdapter.stage?.(
+      {
+        workspaceId: ctx.workspaceId,
+        installationId: ctx.installationId,
+        sourceWorkspaceId: ctx.sourceWorkspaceId,
+        trackCopiedObject: ctx.trackCopiedObject,
+      },
+      entries as never,
+    )
+    return await settingsAdapter.insert(
+      { ...ctx, staged } as never,
+      entries as never,
+    )
+  }
+
   const image = (path: string) => ({
     path,
     name: "a.png",
@@ -255,6 +311,37 @@ describe("settingsAdapter saved reply images", () => {
     mockCreateFile.mockResolvedValue({ id: "new-file" })
     const ctx = buildTxContext()
 
+    await stagedInsert(ctx, [
+      {
+        sourceId: "reply-1",
+        kind: "savedReply",
+        shortcut: "sp",
+        text: "Hi",
+        images: [image("public/space/1/media-library/a")],
+      },
+    ])
+
+    const targetPath = mockCopyObject.mock.calls[0]?.[1] as string
+    expect(targetPath).toMatch(HASHED_MEDIA_LIBRARY_PATH)
+    expect(mockCopyObject).toHaveBeenCalledWith(
+      "public/space/1/media-library/a",
+      targetPath,
+    )
+    expect(mockReplaceImages).toHaveBeenCalledWith(
+      {
+        workspaceId: "ws-1",
+        savedReplyId: "created-reply",
+        mediaLibraryFileIds: ["new-file"],
+      },
+      ctx.tx,
+    )
+    expect(ctx.trackCopiedObject).toHaveBeenCalledWith(targetPath)
+  })
+
+  test("insert alone never copies: an unstaged image is a warning", async () => {
+    mockInsertReturning.mockResolvedValue([{ id: "created-reply" }])
+    const ctx = buildTxContext()
+
     await settingsAdapter.insert(ctx, [
       {
         sourceId: "reply-1",
@@ -265,20 +352,30 @@ describe("settingsAdapter saved reply images", () => {
       },
     ])
 
-    expect(mockCopyObject).toHaveBeenCalledWith(
-      "public/space/1/media-library/a",
-      "public/space/ws-1/media-library/new-id",
+    expect(mockCopyObject).not.toHaveBeenCalled()
+    expect(ctx.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ entityKind: "savedReplyImage" }),
     )
-    expect(mockReplaceImages).toHaveBeenCalledWith(
+  })
+
+  test("a retried install copies to the same key", async () => {
+    mockInsertReturning.mockResolvedValue([{ id: "created-reply" }])
+    mockCreateFile.mockResolvedValue({ id: "new-file" })
+    const entries = [
       {
-        workspaceId: "ws-1",
-        savedReplyId: "created-reply",
-        mediaLibraryFileIds: ["new-file"],
+        sourceId: "reply-1",
+        kind: "savedReply",
+        shortcut: "sp",
+        text: "Hi",
+        images: [image("public/space/1/media-library/a")],
       },
-      ctx.tx,
-    )
-    expect(ctx.trackCopiedObject).toHaveBeenCalledWith(
-      "public/space/ws-1/media-library/new-id",
+    ]
+
+    await stagedInsert(buildTxContext(), entries)
+    await stagedInsert(buildTxContext(), entries)
+
+    expect(mockCopyObject.mock.calls[0]?.[1]).toBe(
+      mockCopyObject.mock.calls[1]?.[1],
     )
   })
 
@@ -286,7 +383,7 @@ describe("settingsAdapter saved reply images", () => {
     mockCopyObject.mockRejectedValue(new Error("NoSuchKey"))
     const ctx = buildTxContext()
 
-    await settingsAdapter.insert(ctx, [
+    await stagedInsert(ctx, [
       {
         sourceId: "reply-1",
         kind: "savedReply",
@@ -308,7 +405,7 @@ describe("settingsAdapter saved reply images", () => {
     mockCopyObject.mockRejectedValue(new Error("NoSuchKey"))
     const ctx = buildTxContext()
 
-    await settingsAdapter.insert(ctx, [
+    await stagedInsert(ctx, [
       {
         sourceId: "reply-1",
         kind: "savedReply",
@@ -332,7 +429,7 @@ describe("settingsAdapter saved reply images", () => {
     mockInsertReturning.mockResolvedValue([{ id: "created-reply" }])
     const ctx = buildTxContext()
 
-    await settingsAdapter.insert(ctx, [
+    await stagedInsert(ctx, [
       {
         sourceId: "reply-1",
         kind: "savedReply",
@@ -350,7 +447,7 @@ describe("settingsAdapter saved reply images", () => {
     mockInsertReturning.mockResolvedValue([{ id: "created-reply" }])
     const ctx = buildTxContext()
 
-    await settingsAdapter.insert(ctx, [
+    await stagedInsert(ctx, [
       { sourceId: "reply-1", kind: "savedReply", shortcut: "sp", text: "Hi" },
     ])
 

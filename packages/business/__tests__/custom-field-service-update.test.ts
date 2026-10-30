@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   returning: vi.fn(),
   findFirst: vi.fn(),
   invalidate: vi.fn(),
+  execute: vi.fn(),
 }))
 
 class FakeDatabaseError extends Error {
@@ -18,6 +19,13 @@ class FakeDatabaseError extends Error {
   }
 }
 
+// The template lock guard has its own suite; these tests cover the service.
+vi.mock("../src/template/installed-resource.service", () => ({
+  changedKeysOf: vi.fn(() => []),
+  assertDeletable: vi.fn(),
+  assertResourceEditable: vi.fn(),
+}))
+
 vi.mock("@chatbotx.io/database/client", () => {
   const where = () => ({ returning: mocks.returning })
   const tx = {
@@ -28,9 +36,14 @@ vi.mock("@chatbotx.io/database/client", () => {
       },
     }),
     query: { customFieldModel: { findFirst: mocks.findFirst } },
+    execute: mocks.execute,
+    // A fresh client per transaction, like the real driver: the lock registry is keyed by it.
+    transaction: (callback: (client: unknown) => unknown) =>
+      callback({ ...tx }),
   }
   return {
     db: tx,
+    sql: vi.fn(),
     and: vi.fn(),
     eq: vi.fn(),
     inArray: vi.fn(),
@@ -127,5 +140,47 @@ describe("customFieldService.update folderId", () => {
     )
 
     expect(mocks.set).toHaveBeenCalledWith({ name: "a", folderId: null })
+  })
+})
+
+describe("customFieldService.update name lock", () => {
+  test("a rename takes the template lock, then the per-workspace name lock", async () => {
+    mocks.execute.mockClear()
+    mocks.returning.mockResolvedValueOnce([existing])
+
+    await customFieldService.update(
+      { workspaceId: "ws-1", id: "cf-1" },
+      { name: "b" },
+    )
+
+    expect(mocks.execute).toHaveBeenCalledTimes(2)
+  })
+
+  test("the template lock is held before the stored row is read inside the transaction", async () => {
+    mocks.execute.mockClear()
+    mocks.findFirst.mockClear()
+    mocks.returning.mockResolvedValueOnce([existing])
+
+    await customFieldService.update(
+      { workspaceId: "ws-1", id: "cf-1" },
+      { description: "d" },
+    )
+
+    expect(mocks.execute.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.findFirst.mock.invocationCallOrder[0] as number,
+    )
+  })
+
+  test("a folder move never waits on the name lock", async () => {
+    mocks.execute.mockClear()
+    mocks.returning.mockResolvedValueOnce([existing])
+
+    await customFieldService.update(
+      { workspaceId: "ws-1", id: "cf-1" },
+      { folderId: "0" },
+    )
+
+    // Only the template lock; the name lock is never taken.
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
   })
 })

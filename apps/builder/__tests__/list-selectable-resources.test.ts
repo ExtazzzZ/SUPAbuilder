@@ -28,9 +28,17 @@ vi.mock("@chatbotx.io/database/repositories", () => ({
   },
 }))
 
-const { listSelectableResources } = await import(
+const { listSelectableResources: listSelectableResourcesAs } = await import(
   "../src/features/templates/queries/list-selectable-resources"
 )
+
+type ListInput = Omit<Parameters<typeof listSelectableResourcesAs>[0], "actor">
+
+const listSelectableResources = (input: ListInput) =>
+  listSelectableResourcesAs({
+    ...input,
+    actor: { kind: "member", permissions: { superAdmin: true } },
+  })
 
 const WS = "ws-1"
 
@@ -263,5 +271,28 @@ describe("listSelectableResources — settings merge/sort/paginate", () => {
     })
 
     expect(result.allIds).toEqual(["sr-1"])
+  })
+})
+
+describe("listSelectableResources — authorization", () => {
+  test("rejects a member without the flows permission", async () => {
+    await expect(
+      listSelectableResourcesAs({
+        workspaceId: WS,
+        category: "flows",
+        actor: { kind: "member", permissions: { ecommerce: true } },
+      }),
+    ).rejects.toMatchObject({ code: "templateManagePermissionDenied" })
+    expect(mockListFlows).not.toHaveBeenCalled()
+  })
+
+  test("rejects a category the member lacks the permission for", async () => {
+    await expect(
+      listSelectableResourcesAs({
+        workspaceId: WS,
+        category: "products",
+        actor: { kind: "member", permissions: { flows: true } },
+      }),
+    ).rejects.toMatchObject({ code: "templateCategoryPermissionDenied" })
   })
 })

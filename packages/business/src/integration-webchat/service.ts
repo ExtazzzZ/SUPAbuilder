@@ -42,7 +42,12 @@ import { flowService } from "../flow/service"
 import { inboxService } from "../inbox/service"
 import { messageCleanupService } from "../message-cleanup/service"
 import { quotaEnforcementService } from "../quota-enforcement/service"
-import { assertDeletable } from "../template/installed-resource.service"
+import {
+  assertDeletable,
+  assertResourceEditable,
+  changedKeysOf,
+} from "../template/installed-resource.service"
+import { withTemplateLockedTransaction } from "../template/template-resource-locks"
 import { type WorkspaceQuotaConsumption, workspaceService } from "../workspace"
 import { brandWebchatMenus } from "./branding"
 
@@ -533,13 +538,48 @@ class IntegrationWebchatService extends BaseService {
     tx?: DatabaseClient
   }): Promise<void> {
     if (!input.tx) {
-      await db.transaction(async (tx) => {
-        await this.update({ ...input, tx })
-      })
+      // The webchat and its welcome flow are locked before the stored row is
+      // read, so the diff that decides the guard is computed under the lock.
+      await withTemplateLockedTransaction(
+        async (tx) => {
+          await this.update({ ...input, tx })
+        },
+        {
+          initialKeys: [
+            { kind: "integrationWebchat", resourceId: input.id },
+            ...(input.data.welcomeFlowId
+              ? [
+                  {
+                    kind: "flow" as const,
+                    resourceId: input.data.welcomeFlowId,
+                  },
+                ]
+              : []),
+          ],
+        },
+      )
       return
     }
 
     const { workspaceId, id, data, tx } = input
+
+    // Diffed against the stored row: the builder form submits every field, and
+    // enabling the widget or editing its domains is the installer's.
+    const existingWebchat = await tx.query.integrationWebchatModel.findFirst({
+      where: { id, workspaceId },
+    })
+    if (existingWebchat) {
+      await assertResourceEditable({
+        workspaceId,
+        resourceKind: "integrationWebchat",
+        resourceIds: [id],
+        changedKeys: changedKeysOf(existingWebchat, data),
+        referencedParents: data.welcomeFlowId
+          ? [{ kind: "flow", resourceId: data.welcomeFlowId }]
+          : [],
+        tx,
+      })
+    }
 
     // `welcomeFlowId` is normalized (falsy -> null) and validated as
     // workspace-owned here — not by callers — so the public API and the

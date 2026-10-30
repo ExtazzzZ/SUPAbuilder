@@ -8,7 +8,12 @@ export const deleteTemplateAction = templateActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(async (props) => {
     const {
+      ctx: { templateActor },
       bindArgsParsedInputs: [workspaceId, templateId],
     } = props
-    await templateService.softDelete({ workspaceId, templateId })
+    await templateService.softDelete({
+      workspaceId,
+      templateId,
+      actor: templateActor,
+    })
   })

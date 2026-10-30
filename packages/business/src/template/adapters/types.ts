@@ -1,9 +1,33 @@
 import type { DatabaseClient } from "@chatbotx.io/database/client"
 import type {
+  FolderType,
   TemplateCategory,
   TemplateResourceCategory,
+  TemplateResourceKind,
 } from "@chatbotx.io/database/partials"
 import type { ReferenceIdMaps } from "@chatbotx.io/flow-config"
+import type { ResourceFingerprint } from "../fingerprint"
+
+/**
+ * The outcome of staging one storage object before the apply transaction:
+ * either the deterministic key it was copied to, or why it was left out (the
+ * `entityKind` of the warning the adapter raises when it inserts the row).
+ */
+export type StagedObject = { targetPath: string } | { skipped: string }
+export type StagedObjects = ReadonlyMap<string, StagedObject>
+
+/**
+ * What the staging pre-phase may use: no transaction (it runs before the
+ * apply transaction opens), and every copy it makes is recorded so the caller
+ * can delete it again if the attempt fails.
+ */
+export type TemplateStageContext = {
+  workspaceId: string
+  installationId: string
+  /** The workspace the template was published from; objects it ships must belong to it. */
+  sourceWorkspaceId?: string
+  trackCopiedObject: (path: string) => void
+}
 
 /**
  * A reference an adapter could not resolve at insert time. Surfaced to the
@@ -40,20 +64,35 @@ export type TemplateInstallContext = {
   workspaceId: string
   installationId: string
   idMaps: Record<string, Map<string, string>>
+  /** `{ sourceInboxId: targetInboxId }` chosen by the installer; validated before the install ran. */
+  inboxBindings?: Readonly<Record<string, string>>
+  /** The workspace the template was published from; storage objects it ships must belong to it. */
+  sourceWorkspaceId?: string
   track: (entry: {
     category: TemplateCategory
-    resourceKind: string
+    resourceKind: TemplateResourceKind
     resourceId: string
     sourceResourceId: string
     wasExisting: boolean
   }) => void
   warn: (warning: TemplateInstallWarning) => void
   /**
-   * Records a storage object copied for this install. Storage is outside the
-   * install transaction, so on a rollback the install service deletes every
-   * recorded object instead of leaving it orphaned.
+   * Source custom-field name -> the exact name of the target field, filled by
+   * the custom-field manifest for every field whose name changed. The install
+   * rewrites `{{name}}` tokens in the shipped resources from it.
    */
-  trackCopiedObject?: (path: string) => void
+  customFieldNameBindings?: Map<string, string>
+  /**
+   * Storage objects the pre-phase already copied (see `stage` on
+   * `ResourceAdapter`). Adapters only read it: there is no storage I/O inside
+   * the apply transaction.
+   */
+  staged?: StagedObjects
+  /**
+   * A sync collects here the flows it published a new version of, so the
+   * caller can run the usual after-publish effects once the transaction commits.
+   */
+  publishedFlows?: { flowId: string; versionId: string }[]
 }
 
 /**
@@ -90,6 +129,8 @@ export type TemplateCollectResult = {
   entries: (Record<string, unknown> & { sourceId: string })[]
   folderIds: readonly string[]
   productCategoryIds: readonly string[]
+  /** Source inboxes the entries are scoped to; shipped as the `inboxes` manifest. */
+  inboxIds?: readonly string[]
   hardDependencies: readonly TemplateHardDependency[]
 }
 
@@ -116,6 +157,58 @@ export type ResourceCollector = {
   ) => Promise<TemplateCollectResult>
 }
 
+/** An entry of the new template version paired with the installed copy it updates. */
+export type SyncPair = {
+  entry: Record<string, unknown> & { sourceId: string }
+  resourceId: string
+}
+
+/**
+ * How a category updates an installed copy in place. A category that cannot
+ * declares `updateNotSupported`, which the sync reports as `notUpdatable`
+ * instead of touching the copy.
+ * All methods run inside the sync transaction and write through `tx`
+ * directly: the service-level edit guards belong to local editors, and the
+ * sync is the one writer allowed past them.
+ */
+export type ResourceSyncHandler = {
+  /**
+   * `false` for a category the sync cannot update in place (see
+   * `updateNotSupported`): it only warns. Absent means updatable.
+   */
+  readonly updatable?: false
+  /**
+   * The content of the installed copy that a template update overwrites, in a
+   * stable shape, or `null` when the copy is gone. Hashed to tell a copy the
+   * installer edited from one the last sync wrote; it must not include
+   * installer-owned fields (toggles, folder, runtime counters).
+   */
+  project: (tx: DatabaseClient, resourceId: string) => Promise<unknown | null>
+  /** Everything `update` is about to overwrite, so the installer can restore it. */
+  serializeBackup: (
+    tx: DatabaseClient,
+    resourceId: string,
+  ) => Promise<{
+    formatVersion: number
+    content: Record<string, unknown>
+  } | null>
+  /**
+   * `formatVersion` is the version the backup was serialized with; a handler
+   * must refuse one it does not know instead of restoring a misread shape.
+   */
+  restoreBackup: (
+    tx: DatabaseClient,
+    resourceId: string,
+    content: Record<string, unknown>,
+    formatVersion: number,
+  ) => Promise<void>
+  /** Overwrites the copies with the new entries; references resolve through `ctx.idMaps`. */
+  update: (
+    ctx: TemplateInstallContext,
+    pairs: readonly SyncPair[],
+  ) => Promise<void>
+}
+
 /**
  * One category's install behavior. `providesKinds`/`consumesKinds` drive the
  * install-order assertion in `install-order.ts`; `deferredKinds` marks which
@@ -128,14 +221,42 @@ export type ResourceCollector = {
  */
 export type ResourceAdapter = {
   readonly category: TemplateResourceCategory
-  readonly providesKinds: readonly string[]
+  readonly providesKinds: readonly TemplateResourceKind[]
   readonly consumesKinds: readonly string[]
   readonly deferredKinds: readonly string[]
+  /**
+   * The `resourceKind` this category's copies are tracked under. Not
+   * `providesKinds`: that lists only the kinds other adapters consume, and is
+   * empty for keywords, webchats, comment automations and entry-point links.
+   * `null` means each entry carries its own kind (settings).
+   */
+  readonly trackedKind: TemplateResourceKind | null
+  /** The folder namespaces whose folders belong to this category (provenance only). */
+  readonly folderTypes: readonly FolderType[]
+  /** The lowest payload `formatVersion` that can carry this category. */
+  readonly minFormatVersion: 1 | 2
+  /**
+   * Copies the storage objects `entries` ship into the installing workspace
+   * at deterministic keys, BEFORE the apply transaction opens (storage I/O
+   * inside it would hold a connection idle past its timeout). Returns the
+   * outcome per entry slot; `insert` only reads it.
+   */
+  stage?: (
+    ctx: TemplateStageContext,
+    entries: readonly (Record<string, unknown> & { sourceId: string })[],
+  ) => Promise<Map<string, StagedObject>>
   insert: (
     ctx: TemplateInstallContext,
     entries: readonly (Record<string, unknown> & { sourceId: string })[],
   ) => Promise<PatchTask[]>
   collector: ResourceCollector
+  /**
+   * How entries of this category are compared for the template's version hash
+   * (see `fingerprint.ts`). Absent: the whole entry is hashed as written.
+   */
+  fingerprint?: ResourceFingerprint
+  /** How a sync updates an installed copy; `updateNotSupported(category)` when it cannot. */
+  sync: ResourceSyncHandler
 }
 
 export const idMapsSnapshot = (
