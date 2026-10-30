@@ -162,12 +162,10 @@ export async function provisionSupaLoginUser(
       role: owner ? ("owner" as const) : ("agent" as const),
       permissions: { ...permissions, superAdmin: access.role === "admin" },
     }
-    if (member) {
-      await tx
-        .update(workspaceMemberModel)
-        .set(memberValues)
-        .where(eq(workspaceMemberModel.id, member.id))
-    } else {
+    // Existing permissions are reconciled by authorizeSupaLoginSession through
+    // the service, which invalidates membership caches and revokes realtime.
+    // Updating them directly here would hide role changes from that comparison.
+    if (!member) {
       await tx
         .insert(workspaceMemberModel)
         .values({ ...memberValues, workspaceId: workspace.id, userId })

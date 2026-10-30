@@ -302,11 +302,44 @@ describe("привязка технического владельца в одн
       "delete",
       "update",
       "link",
-      "update",
       "commit",
     ])
     expect(mocks.update).not.toHaveBeenCalled()
     expect(mocks.select).not.toHaveBeenCalled()
+  })
+
+  test("повторный вход не скрывает смену прав прямой записью до сброса кешей", async () => {
+    const tx = {
+      execute: vi.fn().mockResolvedValue(undefined),
+      select: vi
+        .fn()
+        .mockReturnValueOnce(selection([{ id: "42", ownerId: "other-owner" }]))
+        .mockReturnValueOnce(selection([{ userId: sessionUser.id }]))
+        .mockReturnValueOnce(
+          selection([{ id: sessionUser.id, email: sessionUser.email }]),
+        )
+        .mockReturnValueOnce(
+          selection([
+            {
+              id: "member-1",
+              permissions: { ...permissions, superAdmin: true },
+            },
+          ]),
+        ),
+      update: vi.fn(),
+      insert: vi.fn(),
+    }
+    mocks.transaction.mockImplementation((operation) => operation(tx))
+    expect(
+      await provisionSupaLoginUser(config, {
+        userId: "subject-1",
+        email: sessionUser.email,
+      }),
+    ).toBe(sessionUser.id)
+    expect(tx.update).not.toHaveBeenCalled()
+    sessionRows("agent", true)
+    expect(await authorizeSupaLoginSession(config, sessionUser)).toBe(true)
+    expectRevocation()
   })
 
   test("отказ CRM останавливает bootstrap до начала транзакции", async () => {
