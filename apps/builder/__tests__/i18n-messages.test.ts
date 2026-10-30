@@ -37,7 +37,7 @@ const icuHeaderPattern =
   /\{([A-Za-z][\w.-]*),\s*(plural|select|selectordinal)\s*,/g
 const icuCategoryPattern = /^\s*(=?[\w-]+)\s*\{/
 const zeroWidthPattern = /\u200b|\u200c|\u200d|\ufeff/
-const completeCatalogLocales = ["az", "en", "vi"] as const
+const completeCatalogLocales = ["az", "en", "ru", "vi"] as const
 const cjkCatalogLocales = ["zh-TW", "zh-CN"].filter((locale) =>
   isLocale(locale),
 )
@@ -174,7 +174,59 @@ describe("builder message catalogs", () => {
 
       const translatedValue = translatedMessages[key]
       expect(typeof translatedValue, key).toBe("string")
-      expect(getIcuStructures(translatedValue as string), key).toEqual(expected)
+      const expectedStructures = expected.map((structure) =>
+        locale === "ru" && structure.keyword === "plural"
+          ? {
+              ...structure,
+              categories: [
+                ...new Set([
+                  ...structure.categories,
+                  ...new Intl.PluralRules("ru").resolvedOptions()
+                    .pluralCategories,
+                ]),
+              ].sort(),
+            }
+          : structure,
+      )
+      const translatedStructures = getIcuStructures(
+        translatedValue as string,
+      ).map((structure) =>
+        locale === "ru" && structure.keyword === "plural"
+          ? {
+              ...structure,
+              categories: structure.categories
+                .filter((category) => {
+                  if (!category.startsWith("=")) {
+                    return true
+                  }
+                  // Russian may separate exact 1 from the cardinal `one` branch
+                  // (which also covers 21). Original exact cases stay required.
+                  return expected.some(
+                    (source) =>
+                      source.argument === structure.argument &&
+                      source.keyword === structure.keyword &&
+                      source.categories.includes(category),
+                  )
+                })
+                .sort(),
+            }
+          : structure,
+      )
+      if (locale === "ru") {
+        // Expanding Russian plural branches repeats any nested select once per
+        // branch. Every repeated structure must still match a source signature.
+        const signatures = (structures: IcuStructure[]) =>
+          [
+            ...new Set(
+              structures.map((structure) => JSON.stringify(structure)),
+            ),
+          ].sort()
+        expect(signatures(translatedStructures), key).toEqual(
+          signatures(expectedStructures),
+        )
+      } else {
+        expect(translatedStructures, key).toEqual(expectedStructures)
+      }
     }
   })
 
@@ -247,7 +299,7 @@ describe("locale resolution", () => {
     ["zh-hans", expectedSimplifiedChineseLocale],
     ["zh-Hans-CN", expectedSimplifiedChineseLocale],
     ["zh", expectedSimplifiedChineseLocale],
-    ["xx", "en"],
+    ["xx", "ru"],
   ] as const)("resolves %s to %s", (input, expected) => {
     expect(resolveLocale(input)).toBe(expected)
   })

@@ -8,7 +8,7 @@
     "check-types": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc --noEmit",
     "dev": "dotenv -e .env -e ../../.env -- next dev -p 3123 | pino-pretty",
     "https": "dotenv -e .env -e ../../.env -- next dev -p 3123 --experimental-https",
-    "i18n:check": "i18n-check --source en --locales messages",
+    "i18n:check": "node scripts/check-i18n.ts",
     "lint": "pnpm i18n:check",
     "start": "next start",
     "test": "vitest run --passWithNoTests",

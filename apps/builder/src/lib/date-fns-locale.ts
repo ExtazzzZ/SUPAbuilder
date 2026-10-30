@@ -16,13 +16,14 @@ import {
   pt,
   ptBR,
   ro,
+  ru,
   sv,
   tr,
   vi,
   zhCN,
   zhTW,
-} from "date-fns/locale"
-import { type Locale, locales } from "@/i18n/config"
+} from "react-day-picker/locale"
+import { type Locale, resolveLocale } from "@/i18n/config"
 
 /** The date-fns locale of each app locale (calendar month/day names, `PP` dates). */
 const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = {
@@ -42,6 +43,7 @@ const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = {
   "pt-BR": ptBR,
   "pt-PT": pt,
   ro,
+  ru,
   sv,
   tr,
   vi,
@@ -49,9 +51,6 @@ const DATE_FNS_LOCALES: Record<Locale, DateFnsLocale> = {
   "zh-TW": zhTW,
 }
 
-const isAppLocale = (value: string): value is Locale =>
-  (locales as readonly string[]).includes(value)
-
-/** date-fns locale for a next-intl locale; English for anything unknown. */
+/** Локаль date-fns для выбранного языка приложения. */
 export const toDateFnsLocale = (locale: string): DateFnsLocale =>
-  isAppLocale(locale) ? DATE_FNS_LOCALES[locale] : enUS
+  DATE_FNS_LOCALES[resolveLocale(locale)]
