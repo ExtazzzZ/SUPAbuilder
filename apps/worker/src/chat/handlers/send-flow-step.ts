@@ -989,7 +989,12 @@ export async function sendFlowStep({
           productMessage: preparedProductMessage?.message,
           metadata,
           richResponse,
-          quickReplies: canonicalQuickReplies,
+          // API-мост передаёт клавиатуру в quickReplies: включаем кнопки шага
+          // с уже закодированными переходами и ссылками, как в истории сообщения.
+          quickReplies:
+            targetContactInbox.channel === channelTypes.enum.api
+              ? displayButtons
+              : canonicalQuickReplies,
           messageId: message?.id,
           messageCreatedAt: message?.createdAt,
           sendFrom,
