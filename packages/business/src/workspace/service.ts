@@ -29,6 +29,7 @@ import { contactActivityService } from "../contact-activity/service"
 import { contactInboxPostService } from "../contact-inbox-post/service"
 import { tenantService } from "../enterprise/tenant/service"
 import {
+  ChatbotXException,
   notFoundException,
   WorkspacePurgeIncompleteError,
   workspaceDeletionStartedException,
@@ -56,6 +57,10 @@ import {
   releaseWorkspaceSeat,
   type WorkspaceQuotaConsumption,
 } from "./quota-consumption"
+import {
+  isSupaBuilderSharedMode,
+  isUserWorkspaceAllowed,
+} from "./shared-workspace"
 
 type WorkspaceWhere = Partial<{ id: string; ownerId: string }>
 /** What `writeWorkspace` has already done, for `insertWorkspace`'s rollback. */
@@ -171,6 +176,13 @@ class WorkspaceService extends BaseService {
         lockTx,
       )
       if (existing) {
+        if (!isUserWorkspaceAllowed(existing.id)) {
+          throw new ChatbotXException(
+            "Используйте общее рабочее пространство SUPAbuilder",
+            "sharedWorkspaceRequired",
+            403,
+          )
+        }
         return existing
       }
       return await this.create({
@@ -828,6 +840,15 @@ class WorkspaceService extends BaseService {
     /** Additional members (role `agent`) inserted alongside the owner, in the same transaction. Used by the admin console's "create workspace for an owner" flow. */
     members?: Array<{ userId: string; permissions: WorkspaceMemberPermissions }>
   }): Promise<WorkspaceModel> {
+    // Покрывает в том числе подключение первого канала без workspaceId.
+    // Существующее общее пространство уже создано до включения SUPAlogin.
+    if (isSupaBuilderSharedMode()) {
+      throw new ChatbotXException(
+        "Используйте общее рабочее пространство SUPAbuilder",
+        "sharedWorkspaceRequired",
+        403,
+      )
+    }
     if (isCommunity()) {
       // Community edition allows exactly one workspace per owner. Serialize
       // the count-then-insert so concurrent create requests cannot both pass.

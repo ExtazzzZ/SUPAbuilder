@@ -53,6 +53,12 @@ import {
   SIGNUP_DISABLED_CODE,
   type SignUpGateContext,
 } from "./signup-gate"
+import { supaLoginPlugin } from "./supalogin"
+import { getSupaLoginConfig } from "./supalogin-config"
+import {
+  authorizeSupaLoginSession,
+  provisionSupaLoginUser,
+} from "./supalogin-membership"
 import { getTenantId, resolveTenantOwnerId } from "./tenant-context"
 
 const getTenantSettings = async (request: Request) => {
@@ -548,6 +554,7 @@ export function createAuth(config: AuthConfig) {
     config.socialRedirectOrigin,
   )
   const genericOAuthProvider = resolveGenericOAuthConfig()
+  const supaLoginConfig = getSupaLoginConfig()
 
   return betterAuth({
     databaseHooks: buildDatabaseHooks({
@@ -865,6 +872,16 @@ export function createAuth(config: AuthConfig) {
           refreshTokenExpiresIn: 2_592_000,
         },
       }),
+      ...(supaLoginConfig
+        ? [
+            supaLoginPlugin(supaLoginConfig, {
+              provisionUser: (identity) =>
+                provisionSupaLoginUser(supaLoginConfig, identity),
+              authorizeSession: (user) =>
+                authorizeSupaLoginSession(supaLoginConfig, user),
+            }),
+          ]
+        : []),
       // Relays better-auth's Set-Cookie into the Next.js response. Required so a
       // server-side `auth.api.changePassword` (with `revokeOtherSessions`) rotates
       // the caller's session cookie instead of silently logging them out. Must be

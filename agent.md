@@ -15,3 +15,10 @@ SUPAcrm управляет приёмом Telegram/ВК, интерфейсом 
 Проверки: API channel, идентификаторы worker, provisioning API, self-serve connections, расширения flow-config, typecheck изменённых пакетов и корневой lint. Отдельно фиксировать существующие upstream-ошибки.
 
 - Имя форка и репозиторий: `ExtazzzZ/SUPAbuilder`. `@chatbotx.io/*`, каталоги и env остаются совместимыми с upstream; массовое переименование технических идентификаторов не требуется.
+
+## SUPAlogin и общий workspace
+
+- Инструкция: `docs/SUPALOGIN.md`. Наш адаптер находится в `packages/auth/src/supalogin*.ts`; авторизация включается `SUPALOGIN_ISSUER` и проверяет текущий допуск основной SUPAcrm.
+- Никакого доступа только по email или факту регистрации в IdP. Каждая личность связана по issuer/subject; старым CRM-пользователям нужен повторный вход для binding.
+- Один `SUPABUILDER_WORKSPACE_ID` для одобренных пользователей. Пользовательские API/actions/RSC ограничены этим пространством, новые workspaces запрещены; machine-токены транспорта сохраняются.
+- Изменение роли/отзыв проверяется на каждом get-session. При bootstrap отзываются прежние браузерные сессии и password credential технического владельца, не workspace token.

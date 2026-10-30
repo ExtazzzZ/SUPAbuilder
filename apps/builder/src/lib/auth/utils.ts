@@ -1,6 +1,7 @@
 "use server"
 
 import {
+  isUserWorkspaceAllowed,
   resolveWorkspaceAccess,
   workspaceMemberService,
 } from "@chatbotx.io/business"
@@ -74,13 +75,15 @@ const getCachedCurrentUserAndAllLinkedWorkspaces = cache(
     const resolveLogoUrl = (logo: string | null) =>
       logo ? new URL(logo, storageUrl).toString() : null
 
-    const membersWithResolvedLogos = workspaceMembers.map((member) => ({
-      ...member,
-      workspace: {
-        ...member.workspace,
-        logo: resolveLogoUrl(member.workspace.logo),
-      },
-    }))
+    const membersWithResolvedLogos = workspaceMembers
+      .filter((member) => isUserWorkspaceAllowed(member.workspaceId))
+      .map((member) => ({
+        ...member,
+        workspace: {
+          ...member.workspace,
+          logo: resolveLogoUrl(member.workspace.logo),
+        },
+      }))
 
     return {
       user,

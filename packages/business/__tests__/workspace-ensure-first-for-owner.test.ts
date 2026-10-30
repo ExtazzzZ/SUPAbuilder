@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   lockFirstWorkspace: vi.fn(async () => undefined),
@@ -26,7 +26,18 @@ const createdWorkspace = { id: "ws-created" }
 
 const callerTx = {}
 
+afterEach(() => vi.unstubAllEnvs())
+
 describe("workspaceService.ensureFirstForOwner", () => {
+  test("SUPAlogin does not reuse a previous private workspace for a channel without workspaceId", async () => {
+    vi.stubEnv("SUPALOGIN_ISSUER", "https://login.example.test")
+    vi.stubEnv("SUPABUILDER_WORKSPACE_ID", "11759896832695848")
+    mocks.findActiveByOwner.mockResolvedValue(existingWorkspace)
+    await expect(
+      workspaceService.ensureFirstForOwner({ ownerId: OWNER_ID, name: "Home" }),
+    ).rejects.toThrow()
+  })
+
   let create: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
