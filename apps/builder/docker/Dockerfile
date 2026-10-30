@@ -36,16 +36,9 @@ COPY --from=pre /app/out/full/ .
 ENV BETTER_AUTH_SECRET="docker-build-time-placeholder-not-used-at-runtime-0"
 ENV BETTER_AUTH_URL="http://localhost:3000"
 
-# - TURBO_* secret mounts: optional Turbo remote cache (self-hosted
-#   turborepo-remote-cache or Vercel). When the secrets are not provided the
-#   env vars stay unset and turbo builds without a remote cache — a full
-#   remote-cache hit restores `.next/**` and skips `next build` entirely. This is
-#   the only mechanism that can actually skip the build; wiring it up is a
-#   secrets-only change.
-RUN --mount=type=secret,id=TURBO_API,env=TURBO_API \
-  --mount=type=secret,id=TURBO_TOKEN,env=TURBO_TOKEN \
-  --mount=type=secret,id=TURBO_TEAM,env=TURBO_TEAM \
-  SKIP_ENV_CHECK=true pnpm turbo run build --filter=builder
+# Сборщик Railway не поддерживает secret mounts; используем обычную сборку
+# без необязательного удалённого кеша Turbo и привязки к сервису.
+RUN SKIP_ENV_CHECK=true pnpm turbo run build --filter=builder
 
 # Standalone image has no pnpm workspace; bundle a tiny migration runner (drizzle-orm + pg only).
 RUN apt-get update && apt-get install -y --no-install-recommends jq \
