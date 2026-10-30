@@ -1,3 +1,11 @@
+# SUPAbuilder
+
+Форк [ChatbotX](https://github.com/ChatbotXIO/ChatbotX) для SUPAcrm: workflow, несколько ботов Telegram/ВКонтакте и расширения блоков. Репозиторий: [ExtazzzZ/SUPAbuilder](https://github.com/ExtazzzZ/SUPAbuilder), рабочая ветка `supacrm/integration`. Инструкции интеграции — [agent.md](agent.md).
+
+Исходная документация и авторство ChatbotX сохранены ниже. Переименование не меняет лицензии и ограничения Enterprise.
+
+---
+
 <p align="center">
   <a href="https://github.com/ChatbotXIO/ChatbotX" target="_blank" rel="noopener">
     <picture>

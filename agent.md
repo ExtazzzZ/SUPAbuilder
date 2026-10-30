@@ -1,4 +1,4 @@
-# Форк для SUPAcrm
+# SUPAbuilder — форк для SUPAcrm
 
 Сначала прочитать AGENTS.md. Базовый upstream: 2282d206ec5e407963e4639fbe177a1a35c5bc3d.
 
@@ -13,3 +13,5 @@ SUPAcrm управляет приёмом Telegram/ВК, интерфейсом 
 - Новые инструкции и документацию для SUPAcrm писать по-русски. Существующие upstream-документы сохранять.
 
 Проверки: API channel, идентификаторы worker, provisioning API, self-serve connections, расширения flow-config, typecheck изменённых пакетов и корневой lint. Отдельно фиксировать существующие upstream-ошибки.
+
+- Имя форка и репозиторий: `ExtazzzZ/SUPAbuilder`. `@chatbotx.io/*`, каталоги и env остаются совместимыми с upstream; массовое переименование технических идентификаторов не требуется.
