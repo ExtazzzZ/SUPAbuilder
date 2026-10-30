@@ -82,10 +82,10 @@ describe("resolveTenantSettings — enterprise entitlement gating", () => {
 
     const settings = await resolveTenantSettings({ workspaceId: "workspace-1" })
 
-    expect(settings.name).toBe("ChatbotX")
-    expect(settings.logoLightUrl).toBe(`${BUILDER_URL}/brand/logo_white.svg`)
-    expect(settings.logoDarkUrl).toBe(`${BUILDER_URL}/brand/logo_black.svg`)
-    expect(settings.faviconUrl).toBe(`${BUILDER_URL}/brand/icon_black.svg`)
+    expect(settings.name).toBe("SUPAbuilder")
+    expect(settings.logoLightUrl).toBe(`${BUILDER_URL}/brand/supabuilder-on-dark.svg`)
+    expect(settings.logoDarkUrl).toBe(`${BUILDER_URL}/brand/supabuilder-on-light.svg`)
+    expect(settings.faviconUrl).toBe(`${BUILDER_URL}/brand/supabuilder-icon.svg`)
     expect(settings.theme).toBeNull()
     expect(settings.customJS).toBeNull()
     expect(settings.customCSS).toBeNull()

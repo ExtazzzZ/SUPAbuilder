@@ -5,11 +5,12 @@ import {
   Card,
   CardContent,
   CardHeader,
+  CardTitle,
 } from "@chatbotx.io/ui/components/ui/card"
 import { useSearchParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { OAuthErrorAlert } from "./components/oauth-error-alert"
-import { AuthHeader } from "./components/shared"
+import { SupaBuilderWordmark } from "./components/supabuilder-wordmark"
 
 /** Единственный способ входа в SUPAbuilder при подключённом SUPAlogin. */
 export function SupaLoginSignIn() {
@@ -20,7 +21,10 @@ export function SupaLoginSignIn() {
   return (
     <Card>
       <CardHeader className="text-center">
-        <AuthHeader title={t("auth.signInTitle", { name: "SUPAbuilder" })} />
+        <SupaBuilderWordmark />
+        <CardTitle className="text-muted-foreground text-xl">
+          {t("auth.signInTitle", { name: "SUPAbuilder" })}
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-6">
         <OAuthErrorAlert />

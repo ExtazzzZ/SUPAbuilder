@@ -22,3 +22,8 @@ SUPAcrm управляет приёмом Telegram/ВК, интерфейсом 
 - Никакого доступа только по email или факту регистрации в IdP. Каждая личность связана по issuer/subject; старым CRM-пользователям нужен повторный вход для binding.
 - Один `SUPABUILDER_WORKSPACE_ID` для одобренных пользователей. Пользовательские API/actions/RSC ограничены этим пространством, новые workspaces запрещены; machine-токены транспорта сохраняются.
 - Изменение роли/отзыв проверяется на каждом get-session. При bootstrap отзываются прежние браузерные сессии и password credential технического владельца, не workspace token.
+
+## Оформление SUPAbuilder
+
+- Базовое имя продукта задаётся в `packages/business/src/platform/settings.ts`; его используют title вкладки и стандартные подписи. Enterprise branding gates сохраняются.
+- Анимированное название экрана SUPAlogin: `apps/builder/src/features/auth/components/supabuilder-wordmark.tsx` + CSS module. Геометрия стабильна при SSR, анимация однократная (~1,4 с), `prefers-reduced-motion` отключает движение. Не добавлять задержку доступности кнопки входа и новые зависимости для этой анимации.
