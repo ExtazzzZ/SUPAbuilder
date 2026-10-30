@@ -1,14 +1,15 @@
-# SUPAcrm fork
+# Форк для SUPAcrm
 
-Read AGENTS.md first. Upstream base: 2282d206ec5e407963e4639fbe177a1a35c5bc3d.
+Сначала прочитать AGENTS.md. Базовый upstream: 2282d206ec5e407963e4639fbe177a1a35c5bc3d.
 
-SUPAcrm owns Telegram/VK ingress, operator UI, orders/payments, and outbox delivery. Never connect the existing bot's native webhook to this fork. Route only explicitly selected bots to API channels. Never replay imported history as new automation input.
+SUPAcrm управляет приёмом Telegram/ВК, интерфейсом операторов, заказами, оплатами и доставкой через outbox. Не переключать webhook действующего бота на нативный канал форка. API channel включается только для явно выбранных ботов. Импорт истории не запускает автоматизацию.
 
-- Callback `operationId` is a logical action ID. Preserve it across retries; never hash text or use the HTTP delivery UUID as deduplication key. Include node visits to distinguish intentional loops.
-- API flow sends without a durable logical ID must fail before HTTP. A callback acknowledgment means persisted acceptance, not Telegram/VK delivery.
-- Build extensions through `@chatbotx.io/flow-config/extensions/supacrm`; the first entry compiles handoff/resume to the standard HTTP request block with success/error states. This is an executable block factory, not a separate palette item. New palette node types require the complete upstream registration cascade.
-- Keep CRM action credentials server managed; never return compiled secret-bearing blocks to unauthorised viewers or log them. Handoff/resume is peer scoped, not a global bot pause.
-- Keep commercial licensing and edition gates intact. Root MIT excludes proprietary directories; `packages/database/src/schema/enterprise/LICENSE` also declares commercial terms, and CE schema imports this directory. A source build is NOT proof of a distributable MIT-only CE artifact. Do not claim production license clearance.
-- Use isolated data/queue namespaces. Do not run migrations on existing CRM or upstream databases. SUPAcrm integration runtime docs/scripts are maintained in SUPAcrm `v0/integrations/chatbotx`.
+- `operationId` callback — идентификатор логической отправки. Сохранять его при повторах; хеш текста и HTTP delivery UUID для дедупликации непригодны. Учитывать номер посещения узла для намеренных циклов.
+- API flow без устойчивого идентификатора завершается ошибкой до HTTP-запроса. Подтверждение callback означает сохранение операции, а не доставку в Telegram/ВК.
+- Расширения добавлять через `@chatbotx.io/flow-config/extensions/supacrm`. Первая команда компилирует передачу оператору/возобновление в стандартный HTTP-блок с выходами успеха/ошибки. Это исполняемая фабрика блока, отдельного элемента палитры пока нет. Для нового типа узла пройти все регистрации upstream.
+- Ключ CRM-команд управляется сервером. Не выдавать скомпилированный блок с ключом неавторизованному клиенту и не логировать его. Передача оператору действует на конкретный диалог.
+- Не менять проверку коммерческой лицензии и edition gates. MIT в корне исключает проприетарные каталоги; `packages/database/src/schema/enterprise/LICENSE` также содержит коммерческие условия, а общая CE-схема импортирует этот каталог. Сборка исходников не доказывает право распространять результат как MIT-only CE. Не заявлять о подтверждённой production-лицензии.
+- Использовать отдельные базы и очереди. Не применять миграции к существующим БД CRM/upstream. Документация и скрипты находятся в SUPAcrm `v0/integrations/chatbotx`.
+- Новые инструкции и документацию для SUPAcrm писать по-русски. Существующие upstream-документы сохранять.
 
-Checks: API integration tests, worker operation ID tests, business API provisioning tests, connections self-serve tests, flow-config extension tests, touched typechecks, root lint. Document upstream failures separately.
+Проверки: API channel, идентификаторы worker, provisioning API, self-serve connections, расширения flow-config, typecheck изменённых пакетов и корневой lint. Отдельно фиксировать существующие upstream-ошибки.
