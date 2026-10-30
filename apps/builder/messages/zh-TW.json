@@ -6914,7 +6914,8 @@
       "referenceRemoved": "無法解析的參照已被移除。",
       "savedReply": "在此工作區中找不到被參照的項目，因此已移除該連結。",
       "savedReplyImage": "無法複製圖片。",
-      "tag": "在此工作區中找不到被參照的項目，因此已移除該連結。"
+      "tag": "在此工作區中找不到被參照的項目，因此已移除該連結。",
+      "unlisted": "項目未完整匯入：{code}"
     }
   },
   "qrCodeGenerator": {

@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Ratkaisematon viittaus poistettiin.",
       "savedReply": "Viitattua kohdetta ei löytynyt tästä työtilasta, joten linkki poistettiin.",
       "savedReplyImage": "Kuvaa ei voitu kopioida.",
-      "tag": "Viitattua kohdetta ei löytynyt tästä työtilasta, joten linkki poistettiin."
+      "tag": "Viitattua kohdetta ei löytynyt tästä työtilasta, joten linkki poistettiin.",
+      "unlisted": "Kohdetta ei tuotu kokonaan: {code}"
     }
   },
   "qrCodeGenerator": {

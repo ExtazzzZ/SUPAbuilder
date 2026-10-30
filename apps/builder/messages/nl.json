@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Een verwijzing die niet kon worden opgelost, is verwijderd.",
       "savedReply": "Een gerefereerd item is niet gevonden in deze werkruimte, dus de koppeling is verwijderd.",
       "savedReplyImage": "Een afbeelding kon niet worden gekopieerd.",
-      "tag": "Een gerefereerd item is niet gevonden in deze werkruimte, dus de koppeling is verwijderd."
+      "tag": "Een gerefereerd item is niet gevonden in deze werkruimte, dus de koppeling is verwijderd.",
+      "unlisted": "Item niet volledig overgenomen: {code}"
     }
   },
   "qrCodeGenerator": {

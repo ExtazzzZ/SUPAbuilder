@@ -7737,7 +7737,8 @@
       "referenceRemoved": "A reference that could not be resolved was removed.",
       "savedReply": "A referenced item was not found in this workspace, so the link was dropped.",
       "savedReplyImage": "An image could not be copied.",
-      "tag": "A referenced item was not found in this workspace, so the link was dropped."
+      "tag": "A referenced item was not found in this workspace, so the link was dropped.",
+      "unlisted": "Item not fully brought over: {code}"
     }
   },
   "qrCodeGenerator": {

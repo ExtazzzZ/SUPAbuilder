@@ -106,6 +106,11 @@ describe("previewInstallCollisions", () => {
       } as never,
     })
 
+    // The lookup must not filter by exact names: the match folds case.
+    expect(mocks.customFieldFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { workspaceId: "ws-1" } }),
+    )
+
     const actionOf = (manifest: string, sourceId: string) =>
       collisions.find((c) => c.manifest === manifest && c.sourceId === sourceId)
         ?.action

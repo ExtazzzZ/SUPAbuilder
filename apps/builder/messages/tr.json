@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Çözülemeyen bir başvuru kaldırıldı.",
       "savedReply": "Başvurulan bir öğe bu çalışma alanında bulunamadı, bu yüzden bağlantı kaldırıldı.",
       "savedReplyImage": "Bir görsel kopyalanamadı.",
-      "tag": "Başvurulan bir öğe bu çalışma alanında bulunamadı, bu yüzden bağlantı kaldırıldı."
+      "tag": "Başvurulan bir öğe bu çalışma alanında bulunamadı, bu yüzden bağlantı kaldırıldı.",
+      "unlisted": "Öğe tam olarak aktarılamadı: {code}"
     }
   },
   "qrCodeGenerator": {

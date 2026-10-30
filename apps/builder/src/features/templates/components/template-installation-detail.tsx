@@ -34,6 +34,7 @@ import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { toast } from "sonner"
 import { retryInstallationAction } from "../actions/retry-installation.action"
+import { warningLabel } from "../lib/warning-label"
 import { InstallProgressRefresher } from "./install-progress-refresher"
 import { TemplateInstallationSyncCard } from "./template-installation-sync-card"
 import { UninstalledNotice } from "./uninstalled-notice"
@@ -323,15 +324,6 @@ function Fact({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-
-/** The translated text for a warning code; an unknown code shows as itself. */
-const warningLabel = (
-  t: ReturnType<typeof useTranslations>,
-  code: string,
-): string =>
-  t.has(`templates.warningCodes.${code}`)
-    ? t(`templates.warningCodes.${code}`)
-    : code
 
 function WarningsSheet({ detail }: { detail: Detail }) {
   const t = useTranslations()

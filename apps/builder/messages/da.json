@@ -6868,7 +6868,8 @@
       "referenceRemoved": "En reference, der ikke kunne løses, blev fjernet.",
       "savedReply": "Et refereret element blev ikke fundet i dette arbejdsområde, så linket blev fjernet.",
       "savedReplyImage": "Et billede kunne ikke kopieres.",
-      "tag": "Et refereret element blev ikke fundet i dette arbejdsområde, så linket blev fjernet."
+      "tag": "Et refereret element blev ikke fundet i dette arbejdsområde, så linket blev fjernet.",
+      "unlisted": "Elementet blev ikke overført fuldt ud: {code}"
     }
   },
   "qrCodeGenerator": {

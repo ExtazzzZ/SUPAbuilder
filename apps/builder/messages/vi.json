@@ -7093,7 +7093,8 @@
       "referenceRemoved": "Một tham chiếu không phân giải được đã bị gỡ.",
       "savedReply": "Một mục được tham chiếu không có trong workspace này nên liên kết đã bị bỏ.",
       "savedReplyImage": "Không thể sao chép một hình ảnh.",
-      "tag": "Một mục được tham chiếu không có trong workspace này nên liên kết đã bị bỏ."
+      "tag": "Một mục được tham chiếu không có trong workspace này nên liên kết đã bị bỏ.",
+      "unlisted": "Mục chưa được mang sang đầy đủ: {code}"
     }
   },
   "qrCodeGenerator": {

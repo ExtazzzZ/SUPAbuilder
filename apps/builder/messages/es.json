@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Se eliminó una referencia que no se pudo resolver.",
       "savedReply": "No se encontró un elemento referenciado en este espacio de trabajo, por lo que se eliminó el vínculo.",
       "savedReplyImage": "No se pudo copiar una imagen.",
-      "tag": "No se encontró un elemento referenciado en este espacio de trabajo, por lo que se eliminó el vínculo."
+      "tag": "No se encontró un elemento referenciado en este espacio de trabajo, por lo que se eliminó el vínculo.",
+      "unlisted": "Elemento no incorporado por completo: {code}"
     }
   },
   "qrCodeGenerator": {

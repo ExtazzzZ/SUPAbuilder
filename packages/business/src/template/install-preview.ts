@@ -71,8 +71,11 @@ const previewCustomFields = async (
   if (entries.length === 0) {
     return []
   }
+  // Every field of the workspace, as the install reads them: the name fold
+  // (case and whitespace) is applied below, so an exact-name SQL filter would
+  // miss `Age` when the template ships `age`.
   const rows = await db.query.customFieldModel.findMany({
-    where: { workspaceId, name: { in: entries.map(([, f]) => f.name) } },
+    where: { workspaceId },
     columns: { id: true, name: true, type: true },
   })
   const byKey = new Map(

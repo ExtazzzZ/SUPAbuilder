@@ -6834,7 +6834,8 @@
       "referenceRemoved": "En referens som inte kunde lösas togs bort.",
       "savedReply": "Ett refererat objekt hittades inte i denna arbetsyta, så länken togs bort.",
       "savedReplyImage": "En bild kunde inte kopieras.",
-      "tag": "Ett refererat objekt hittades inte i denna arbetsyta, så länken togs bort."
+      "tag": "Ett refererat objekt hittades inte i denna arbetsyta, så länken togs bort.",
+      "unlisted": "Objektet fördes inte över helt: {code}"
     }
   },
   "texts": {

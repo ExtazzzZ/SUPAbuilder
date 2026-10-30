@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Referensi yang tidak dapat diselesaikan telah dihapus.",
       "savedReply": "Item yang dirujuk tidak ditemukan di workspace ini, sehingga tautannya dihapus.",
       "savedReplyImage": "Gambar tidak dapat disalin.",
-      "tag": "Item yang dirujuk tidak ditemukan di workspace ini, sehingga tautannya dihapus."
+      "tag": "Item yang dirujuk tidak ditemukan di workspace ini, sehingga tautannya dihapus.",
+      "unlisted": "Item tidak sepenuhnya terbawa: {code}"
     }
   },
   "qrCodeGenerator": {

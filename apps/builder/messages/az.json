@@ -7737,7 +7737,8 @@
       "referenceRemoved": "Həll edilə bilməyən istinad silindi.",
       "savedReply": "İstinad edilən element bu iş sahəsində tapılmadı, ona görə keçid silindi.",
       "savedReplyImage": "Şəkil kopyalana bilmədi.",
-      "tag": "İstinad edilən element bu iş sahəsində tapılmadı, ona görə keçid silindi."
+      "tag": "İstinad edilən element bu iş sahəsində tapılmadı, ona görə keçid silindi.",
+      "unlisted": "Element tam köçürülmədi: {code}"
     }
   },
   "qrCodeGenerator": {

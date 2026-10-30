@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Un riferimento non risolvibile è stato rimosso.",
       "savedReply": "Un elemento referenziato non è stato trovato in questo spazio di lavoro, quindi il collegamento è stato rimosso.",
       "savedReplyImage": "Non è stato possibile copiare un’immagine.",
-      "tag": "Un elemento referenziato non è stato trovato in questo spazio di lavoro, quindi il collegamento è stato rimosso."
+      "tag": "Un elemento referenziato non è stato trovato in questo spazio di lavoro, quindi il collegamento è stato rimosso.",
+      "unlisted": "Elemento non importato del tutto: {code}"
     }
   },
   "qrCodeGenerator": {

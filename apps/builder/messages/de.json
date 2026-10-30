@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Eine nicht auflösbare Referenz wurde entfernt.",
       "savedReply": "Ein referenziertes Element wurde in diesem Arbeitsbereich nicht gefunden, daher wurde die Verknüpfung entfernt.",
       "savedReplyImage": "Ein Bild konnte nicht kopiert werden.",
-      "tag": "Ein referenziertes Element wurde in diesem Arbeitsbereich nicht gefunden, daher wurde die Verknüpfung entfernt."
+      "tag": "Ein referenziertes Element wurde in diesem Arbeitsbereich nicht gefunden, daher wurde die Verknüpfung entfernt.",
+      "unlisted": "Element nicht vollständig übernommen: {code}"
     }
   },
   "qrCodeGenerator": {

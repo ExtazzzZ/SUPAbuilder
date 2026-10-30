@@ -7608,7 +7608,8 @@
       "referenceRemoved": "O referință care nu a putut fi rezolvată a fost eliminată.",
       "savedReply": "Un element referit nu a fost găsit în acest spațiu de lucru, așa că legătura a fost eliminată.",
       "savedReplyImage": "O imagine nu a putut fi copiată.",
-      "tag": "Un element referit nu a fost găsit în acest spațiu de lucru, așa că legătura a fost eliminată."
+      "tag": "Un element referit nu a fost găsit în acest spațiu de lucru, așa că legătura a fost eliminată.",
+      "unlisted": "Element neadus complet: {code}"
     }
   },
   "tiktok": {

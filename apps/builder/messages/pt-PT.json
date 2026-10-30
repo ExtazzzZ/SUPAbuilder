@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Foi removida uma referência que não foi possível resolver.",
       "savedReply": "Um item referenciado não foi encontrado neste espaço de trabalho, pelo que a ligação foi removida.",
       "savedReplyImage": "Não foi possível copiar uma imagem.",
-      "tag": "Um item referenciado não foi encontrado neste espaço de trabalho, pelo que a ligação foi removida."
+      "tag": "Um item referenciado não foi encontrado neste espaço de trabalho, pelo que a ligação foi removida.",
+      "unlisted": "Item não foi totalmente trazido: {code}"
     }
   },
   "qrCodeGenerator": {

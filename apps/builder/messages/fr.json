@@ -6868,7 +6868,8 @@
       "referenceRemoved": "Une référence non résolue a été supprimée.",
       "savedReply": "Un élément référencé est introuvable dans cet espace de travail, le lien a donc été supprimé.",
       "savedReplyImage": "Une image n’a pas pu être copiée.",
-      "tag": "Un élément référencé est introuvable dans cet espace de travail, le lien a donc été supprimé."
+      "tag": "Un élément référencé est introuvable dans cet espace de travail, le lien a donc été supprimé.",
+      "unlisted": "Élément non repris entièrement : {code}"
     }
   },
   "qrCodeGenerator": {
