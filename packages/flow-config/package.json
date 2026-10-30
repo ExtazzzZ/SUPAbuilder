@@ -19,7 +19,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./field-reference": "./src/field-reference.ts",
-    "./button-limits": "./src/steps/button-limits.ts"
+    "./button-limits": "./src/steps/button-limits.ts",
+    "./extensions/supacrm": "./src/extensions/supacrm.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",

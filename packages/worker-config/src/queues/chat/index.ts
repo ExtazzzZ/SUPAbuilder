@@ -74,6 +74,7 @@ export type ChatJobSendChannelMessage = {
 export type ChatJobSendFlowStep = {
   type: typeof ChatJobAction.sendFlowMessage
   data: {
+    operationId?: string
     conversationId: string
     contactInboxId?: string
     flowId: string

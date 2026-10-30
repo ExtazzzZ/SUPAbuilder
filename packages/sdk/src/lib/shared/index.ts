@@ -39,6 +39,7 @@ export const HandleRequestType = {
 } as const
 
 export type ReceivedMessageResult = {
+  entryFlowId?: string
   message: IncomingMessage | null
   contact: IncomingContact
   postbackAction: string | null

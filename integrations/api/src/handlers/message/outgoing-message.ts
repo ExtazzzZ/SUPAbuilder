@@ -9,10 +9,16 @@ import { z } from "zod"
 import { postSignedEnvelope } from "../../lib/delivery"
 import type { ApiAuthValue } from "../../schema"
 
-const messageStatusPayloadSchema = z.object({
-  messageSourceId: z.string().min(1),
-  status: z.string(),
-})
+const messageStatusPayloadSchema = z
+  .object({
+    messageId: z.string().min(1).optional(),
+    messageSourceId: z.string().min(1).optional(),
+    status: z.enum(["delivered", "failed", "read"]),
+  })
+  .refine(
+    (data) => Boolean(data.messageId || data.messageSourceId),
+    "A message ID is required",
+  )
 
 export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
   props,
@@ -31,6 +37,7 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
     callbackUrl: ctx.auth.callbackUrl,
     signingSecret: ctx.auth.signingSecret,
     envelope: {
+      operationId: message.id,
       event: "message_created",
       timestamp: new Date().toISOString(),
       contact: { id: contact.id, sourceId: contact.sourceId },
@@ -61,7 +68,7 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
   async (props) => {
     const {
       ctx,
-      data: { contact, step, quickReplies },
+      data: { contact, step, quickReplies, operationId },
     } = props
 
     const { text, contentAttributes } = mapFlowStepToEnvelope(step)
@@ -70,14 +77,20 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
       return { messageIds: [], sentCount: 0 }
     }
 
+    if (!operationId) {
+      throw new Error("API flow send requires a stable operationId")
+    }
+
     const response = await postSignedEnvelope({
       callbackUrl: ctx.auth.callbackUrl,
       signingSecret: ctx.auth.signingSecret,
       envelope: {
+        operationId,
         event: "message_created",
         timestamp: new Date().toISOString(),
         contact: { id: contact.id, sourceId: contact.sourceId },
         message: {
+          id: operationId,
           text,
           messageType: "outgoing",
           contentType: contentTypes.enum.text,
@@ -181,7 +194,7 @@ export const handleMessageStatus: NonNullable<
 
   return Promise.resolve({
     message: {
-      sourceId: validated.messageSourceId,
+      sourceId: (validated.messageId ?? validated.messageSourceId) as string,
       messageType: "outgoing",
       contentType: contentTypes.enum.text,
       contentAttributes: { deliveryStatus: validated.status },

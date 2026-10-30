@@ -1043,6 +1043,7 @@ export function emitHumanMessageSentEvents(input: {
 }
 
 export async function sendFlowStepToChannel({
+  operationId,
   conversation,
   contactInbox,
   flowId,
@@ -1060,6 +1061,7 @@ export async function sendFlowStepToChannel({
   humanSender,
   isTemplateMessage = false,
 }: {
+  operationId?: string
   conversation: ConversationModel
   contactInbox: ContactInboxModel
   flowId: string
@@ -1124,6 +1126,7 @@ export async function sendFlowStepToChannel({
           ...contactInbox,
           sourceConversationId: resolveChannelConversationId(conversation),
         },
+        operationId,
         flowId,
         flowVersionId,
         step: resolvedStep,

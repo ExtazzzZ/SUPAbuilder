@@ -459,6 +459,7 @@ async function resolveProductMessageForStep(props: {
 }
 
 export async function sendFlowStep({
+  operationId,
   conversationId,
   contactInboxId,
   flowId,
@@ -979,6 +980,7 @@ export async function sendFlowStep({
           true,
         )
       : sendFlowStepToChannel({
+          operationId,
           conversation,
           contactInbox: targetContactInbox,
           flowId,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { automatedResponseService } from "@chatbotx.io/automated-response"
 import {
   conversationService,
+  flowService,
   withBlockedOwnerGuard,
 } from "@chatbotx.io/business"
 import { channelTypes } from "@chatbotx.io/database/partials"
@@ -227,6 +228,7 @@ function startIntegrationWorker() {
               }
               const {
                 message,
+                entryFlowId,
                 postbackAction,
                 quickReplyAction,
                 conversation,
@@ -308,6 +310,32 @@ function startIntegrationWorker() {
                   {
                     jobId: `questionnaire-challenge-${routing.conversation.id}-${message.id}`,
                   },
+                )
+              } else if (routing.type === "automatedResponse" && entryFlowId) {
+                if (
+                  !(await flowService.exists(
+                    conversation.workspaceId,
+                    entryFlowId,
+                  ))
+                ) {
+                  throw new Error(
+                    "API entry flow does not exist in channel workspace",
+                  )
+                }
+                await integrationQueue.add(
+                  IntegrationJobAction.sendFlow,
+                  {
+                    type: IntegrationJobAction.sendFlow,
+                    data: {
+                      conversationId: routing.conversation.id,
+                      contactInboxId: message.contactInboxId,
+                      flowId: entryFlowId,
+                      triggerMessageId: message.id,
+                      triggerMessageCreatedAt: message.createdAt,
+                      startedByContactMessage: true,
+                    },
+                  },
+                  { jobId: `api-entry-${message.id}-${entryFlowId}` },
                 )
               } else if (routing.type === "automatedResponse") {
                 await automatedResponseService.enqueue({

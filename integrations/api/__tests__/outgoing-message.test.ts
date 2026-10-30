@@ -8,7 +8,7 @@ vi.mock("../src/lib/delivery", () => ({
   postSignedEnvelope: mockPostSignedEnvelope,
 }))
 
-const { sendFlowStep } = await import(
+const { sendFlowStep, handleMessageStatus } = await import(
   "../src/handlers/message/outgoing-message"
 )
 
@@ -32,6 +32,7 @@ describe("api sendFlowStep — sendMultipleImages", () => {
       ctx,
       data: {
         contact,
+        operationId: "operation-1",
         quickReplies: [],
         step: {
           id: "step-1",
@@ -65,6 +66,7 @@ describe("api sendFlowStep — sendMultipleImages", () => {
         ctx,
         data: {
           contact,
+          operationId: "operation-1",
           quickReplies: [],
           step: {
             id: "step-card-1",
@@ -79,4 +81,52 @@ describe("api sendFlowStep — sendMultipleImages", () => {
 
     expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
   })
+})
+
+describe("API callback operation identity", () => {
+  const props = {
+    ctx,
+    data: {
+      contact,
+      operationId: "operation-retry",
+      step: { id: "1", stepType: "sendText", text: "same text", buttons: [] },
+    },
+  } as never
+  test("replays the logical ID and rejects missing identity before HTTP", async () => {
+    vi.clearAllMocks()
+    await sendFlowStep(props)
+    await sendFlowStep(props)
+    for (const [args] of mockPostSignedEnvelope.mock.calls) {
+      expect(args.envelope.operationId).toBe("operation-retry")
+      expect(args.envelope.message.id).toBe("operation-retry")
+    }
+    vi.clearAllMocks()
+    await expect(
+      sendFlowStep({
+        ctx,
+        data: {
+          contact,
+          step: { id: "1", stepType: "sendText", text: "same text" },
+        },
+      } as never),
+    ).rejects.toThrow("stable operationId")
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+  })
+})
+
+test("delivery status accepts the documented public messageId and legacy alias", async () => {
+  for (const id of [
+    { messageId: "outbox-1" },
+    { messageSourceId: "outbox-1" },
+  ]) {
+    const result = await handleMessageStatus({
+      data: { payload: { ...id, status: "delivered" } },
+    } as never)
+    expect(result?.message?.sourceId).toBe("outbox-1")
+  }
+  expect(() =>
+    handleMessageStatus({
+      data: { payload: { status: "delivered" } },
+    } as never),
+  ).toThrow("message ID")
 })

@@ -75,6 +75,8 @@ export type ChannelSendFlowStepProps<IAuth extends AuthValue> = {
   ctx: Context<IAuth>
   data: {
     contact: OutgoingContact
+    /** Stable logical send identity, preserved across queue and callback retries. */
+    operationId?: string
     flowId: string
     flowVersionId?: string
     step: SendFlowStepData
@@ -133,6 +135,7 @@ export type MessageHandlers<
       ctx: Context<IAuth>
       data: {
         contact: OutgoingContact
+        operationId?: string
         flowId: string
         flowVersionId?: string
         step: TStep

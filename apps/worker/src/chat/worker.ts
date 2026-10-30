@@ -28,6 +28,7 @@ import {
   sendWhatsappTemplateMessage,
   sendWhatsappTemplateToConversation,
 } from "./handlers/send-whatsapp-template"
+import { createChatOperationId } from "./operation-id"
 
 const botSendActions = new Set<ChatJobData["type"]>([
   ChatJobAction.sendFlowMessage,
@@ -90,7 +91,11 @@ function startChatWorker() {
               )
               return
             case ChatJobAction.sendFlowMessage:
-              await sendFlowStep(job.data.data)
+              await sendFlowStep({
+                ...job.data.data,
+                operationId:
+                  job.data.data.operationId ?? createChatOperationId(job),
+              })
               return
             case ChatJobAction.sendChatMessage:
               await sendChatMessage(job.data.data, !isFinalAttempt(job))

@@ -139,6 +139,7 @@ import {
   isInstagramViaFacebook,
   resolveIntegrationContextFromContactInbox,
 } from "../../services/integrations"
+import { selectApiEntryFlow } from "../routing"
 import { isCommentReply, processCommentAutomation } from "./comment-automation"
 import { resolveLiveComment } from "./comment-automation/live-comment"
 import { runAsMissedCommentReplay } from "./comment-automation/replay-priority"
@@ -291,6 +292,7 @@ const isThirdPartyEcho = (props: {
 export const receiveMessage = async (
   props: IntegrationJobReceiveMessage["data"],
 ): Promise<{
+  entryFlowId?: string
   message: MessageWithAttachments | null
   conversation: ConversationModel
   postbackAction: string | null
@@ -913,6 +915,12 @@ export const receiveMessage = async (
   })
 
   return {
+    entryFlowId: selectApiEntryFlow({
+      integrationType,
+      isNewContact,
+      text: incomingMessage?.text,
+      entryFlowId: parsedMessage.entryFlowId,
+    }),
     message: createdMessage,
     conversation,
     postbackAction,

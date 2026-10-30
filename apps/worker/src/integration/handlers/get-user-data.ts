@@ -46,6 +46,7 @@ import {
 import { createId } from "@chatbotx.io/utils"
 import { ChatJobAction, chatQueue } from "@chatbotx.io/worker-config"
 import { add, isBefore } from "date-fns"
+import { createFlowOperationId } from "../../chat/operation-id"
 import { logger } from "../../lib/logger"
 import { waitForChatJobCompletion } from "../utils/message"
 import type { ExecuteStepProps } from "./flow"
@@ -558,6 +559,7 @@ async function sendMessage(
   }
 
   await enqueueFlowStepMessage({
+    operationId: createFlowOperationId(props),
     conversationId: conversation.id,
     contactInboxId: contactInbox.id,
     flowId: flowVersion.flowId,

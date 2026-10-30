@@ -18,6 +18,7 @@ import {
   IntegrationJobAction,
   integrationQueue,
 } from "@chatbotx.io/worker-config"
+import { createFlowOperationId } from "../../chat/operation-id"
 import { logger } from "../../lib/logger"
 import { mintRandomFlowExecutionKey } from "../flow-execution-key"
 import { syncActiveCampaignContact } from "./active-campaign-handler"
@@ -130,6 +131,7 @@ export async function sendFlowMessage(
     appointmentId,
   } = props
   await enqueueFlowStepMessage({
+    operationId: createFlowOperationId(props),
     conversationId: conversation.id,
     contactInboxId: props.contactInbox.id,
     flowId: flowVersion.flowId,

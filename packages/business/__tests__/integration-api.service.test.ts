@@ -219,6 +219,7 @@ describe("integrationApiService.connect", () => {
       workspaceId: "workspace-1",
       inboxId: "api-1",
       token: "cbx_api_token",
+      signingSecret: "signing-secret",
       connection,
     })
     expect(mocks.upsertConnectionRow).toHaveBeenCalledWith(

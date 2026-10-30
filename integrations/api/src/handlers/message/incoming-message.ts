@@ -16,6 +16,13 @@ import { z } from "zod"
  * builder's own request validation.
  */
 export const incomingApiMessageSchema = z.object({
+  flowId: z
+    .string()
+    .regex(/^\d+$/)
+    .optional()
+    .describe(
+      "Workspace flow to start for a new contact or /start; pending input takes priority.",
+    ),
   contact: z
     .object({
       sourceId: z
@@ -158,6 +165,7 @@ export const receiveMessage = ({
   return Promise.resolve({
     message,
     contact,
+    entryFlowId: validated.flowId,
     postbackAction: validated.postbackPayload ?? null,
     quickReplyAction: null,
     ref: null,
