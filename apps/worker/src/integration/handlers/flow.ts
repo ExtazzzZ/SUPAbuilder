@@ -31,6 +31,7 @@ import {
   isQuickReplyCarrierStep,
   type MetadataPayload,
   resolveFlowActionTarget,
+  resolveNamedEntry,
   type SendTextStepSchema,
   type StepType,
   stepTypes,
@@ -1077,6 +1078,24 @@ async function runFlowAction(
     workspaceId: conversation.workspaceId, flowId: parsedAction.flowId,
   })
   if (owningBinding.kind !== "legacy") return
+
+  if (parsedAction.entry) {
+    if (contactInbox.channel !== "api") throw new SdkException("Named entry requires API channel")
+    const { flowVersion } = await detectFlowVersion({
+      flowId: parsedAction.flowId,
+      workspaceId: conversation.workspaceId,
+    })
+    const nodeId = resolveNamedEntry(flowVersion.nodes as unknown as FlowNode[], parsedAction.entry)
+    await runFlowNode({
+      conversationId: data.conversationId,
+      contactInboxId: data.contactInboxId,
+      flowId: parsedAction.flowId,
+      flowVersionId: flowVersion.id,
+      nodeId,
+      crmNavigation: data.crmNavigation,
+    }, { flowExecutionKey })
+    return
+  }
 
   const { buttonId } = parsedAction
   if (!buttonId) {

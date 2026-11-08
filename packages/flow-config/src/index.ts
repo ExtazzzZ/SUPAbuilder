@@ -222,3 +222,5 @@ export * from "./template-structure"
 export * from "./types"
 export * from "./util"
 export * from "./validation-codes"
+
+export * from "./named-entry"

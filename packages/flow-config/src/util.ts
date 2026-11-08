@@ -61,7 +61,9 @@ export const buttonPayloadSchema = z
     cid: strictBigintAsString().optional(),
     ca: strictBigintAsString().optional(),
     n: strictBigintAsString().optional(),
+    e: z.literal("apple.feedback").optional(),
   })
+  .refine((data) => !data.e || (!data.b && !data.n && !data.fv), "Named entry cannot pin a target")
   .transform((data) => ({
     flowId: data.f,
     ...(data.fv ? { flowVersionId: data.fv } : {}),
@@ -71,6 +73,7 @@ export const buttonPayloadSchema = z
     ...(data.cid ? { contactInboxId: data.cid } : {}),
     ...(data.ca ? { commentAutomationId: data.ca } : {}),
     ...(data.n ? { nodeId: data.n } : {}),
+    ...(data.e ? { entry: data.e } : {}),
   }))
 export type ButtonPayload = z.infer<typeof buttonPayloadSchema>
 
@@ -96,6 +99,7 @@ export const encodeButtonPayload = (props: ButtonPayload): string => {
     // Start-node target for out-of-flow taps (Marketing Messages
     // `startExternalNode`). Appended after `ca` for the same reason.
     props.nodeId ?? "",
+    props.entry ?? "",
   ]
   while (parts.length > 2 && parts.at(-1) === "") {
     parts.pop()
@@ -118,7 +122,7 @@ export const decodeButtonPayload = (
       return buttonPayloadSchema.parse({ f: payload })
     }
     if (payload.includes(":")) {
-      const [f, fv, b, br, ss, cid, ca, n] = payload.split(":")
+      const [f, fv, b, br, ss, cid, ca, n, e] = payload.split(":")
       return buttonPayloadSchema.parse({
         f,
         fv: fv || undefined,
@@ -128,6 +132,7 @@ export const decodeButtonPayload = (
         cid: cid || undefined,
         ca: ca || undefined,
         n: n || undefined,
+        e: e || undefined,
       })
     }
     // Legacy format: base64+JSON (payloads encoded before the colon format)

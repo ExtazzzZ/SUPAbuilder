@@ -417,6 +417,33 @@ describe("flow action channel gating (bare flow ID)", () => {
     })
   }
 
+  test("событие Apple запускает блок после пересоздания кнопки", async () => {
+    mockChannel("api")
+    const target = {
+      id: "555", position: { x: 0, y: 0 },
+      data: { name: "Любое имя", isStartNode: false, details: {
+        steps: [], supacrmReminder: { anchor: "customer_confirmed" },
+      } },
+    } as unknown as FlowNode
+    const next = {
+      id: "666", position: { x: 0, y: 0 },
+      data: { name: "Next", isStartNode: false, details: { steps: [] } },
+    } as FlowNode
+    detectFlowVersion.mockResolvedValue({
+      flowVersion: makeFlowVersion([target, next], [{
+        id: "edge", source: "555", sourceHandle: "555", target: "666", targetHandle: "input",
+      }]), useLatestFlowVersion: true,
+    })
+    await runFlowPostback({
+      conversationId: "conv-1", contactInboxId: "ci-1", ref: null,
+      action: "11::::::::apple.feedback",
+      crmNavigation: { sourceEventId: "confirmed" },
+    })
+    expect(integrationQueueAdd).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      data: expect.objectContaining({ nodeId: "666", crmNavigation: { sourceEventId: "confirmed" } }),
+    }))
+  })
+
   test.each([
     ["postback", runFlowPostback],
     ["quickReply", runFlowQuickReply],
