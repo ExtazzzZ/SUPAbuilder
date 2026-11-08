@@ -17,6 +17,8 @@ export const postSignedEnvelope = async (args: {
   callbackUrl: string
   signingSecret: string
   envelope: unknown
+  timeoutMs?: number
+  retry?: number
 }): Promise<DeliveryResponse | null> => {
   await assertPublicUrl(args.callbackUrl, "API channel callback URL")
 
@@ -32,7 +34,8 @@ export const postSignedEnvelope = async (args: {
       "X-ChatbotX-Timestamp": timestamp,
       "X-ChatbotX-Delivery": crypto.randomUUID(),
     },
-    timeout: DELIVERY_TIMEOUT_MS,
+    timeout: args.timeoutMs ?? DELIVERY_TIMEOUT_MS,
+    ...(args.retry === undefined ? {} : { retry: args.retry }),
   })
 
   const text = await response.text()

@@ -1,4 +1,7 @@
-import { isWorkspaceScheduledForDeletion } from "@chatbotx.io/business"
+import {
+  isSupaBuilderSharedMode,
+  isWorkspaceScheduledForDeletion,
+} from "@chatbotx.io/business"
 import {
   Avatar,
   AvatarFallback,
@@ -203,7 +206,8 @@ const WorkspacesList = async ({
   // are meant to stay single-workspace), but a user with ZERO workspaces has
   // no other path to `/channels/create` anywhere on this page — hiding it
   // here leaves them stuck on a static "no workspaces" message forever.
-  const showCreateCard = !isCommunity() || workspaces.length === 0
+  const showCreateCard =
+    !isSupaBuilderSharedMode() && (!isCommunity() || workspaces.length === 0)
   const ownerIds = new Set(ownerWorkspaceIds)
   const superAdminIds = new Set(superAdminWorkspaceIds)
   const ownerLabel = t("home.owner")

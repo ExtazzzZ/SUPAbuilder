@@ -1,5 +1,10 @@
 // @vitest-environment node
 
+import {
+  applyReceiptEmailTemplate,
+  createSupacrmEmailNode,
+  getSupacrmForm,
+} from "@chatbotx.io/flow-config"
 import { afterEach, describe, expect, test, vi } from "vitest"
 
 const {
@@ -230,4 +235,51 @@ describe("flowsAdapter", () => {
       expect(mockFlowModelFindMany).not.toHaveBeenCalled()
     })
   })
+})
+
+test.each([
+  "ws-1",
+  "ws-foreign",
+])("Email pin is atomic for installation from %s", async (sourceWorkspaceId) => {
+  const ctx = {
+    ...buildContext({ flow: new Map([["10", "999"]]) }),
+    sourceWorkspaceId,
+  }
+  const email = createSupacrmEmailNode({ nodeProps: { id: "101" } })
+  const source = {
+    kind: "receiptEmail",
+    flowId: "10",
+    flowVersionId: "20",
+    nodeId: "30",
+  } as const
+  const bound = applyReceiptEmailTemplate(email, {
+    source,
+    snapshot: getSupacrmForm(email.data.details),
+    overrides: {},
+  })
+  mockCreateFromImport.mockResolvedValue("new-flow")
+  await flowsAdapter.insert(ctx, [
+    {
+      sourceId: "10",
+      name: "Email",
+      active: false,
+      enableInInbox: false,
+      startNodeId: "101",
+      nodes: [bound],
+      edges: [],
+    },
+  ])
+  const saved = mockCreateFromImport.mock.lastCall?.[0].nodes[0]
+  expect(saved.data.details.supacrmForm).toEqual(bound.data.details.supacrmForm)
+  expect(saved.data.details.quickReplies).toEqual(
+    bound.data.details.quickReplies,
+  )
+  if (sourceWorkspaceId === "ws-1") {
+    expect(saved.data.details.supacrmFormTemplate.source).toEqual(source)
+  } else {
+    expect(saved.data.details.supacrmFormTemplate).toBeUndefined()
+    expect(ctx.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ entityKind: "receiptEmailTemplateDetached" }),
+    )
+  }
 })

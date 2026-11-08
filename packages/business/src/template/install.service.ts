@@ -308,6 +308,7 @@ const runInstall = async (
     input.workspaceId,
     copiedObjectPaths,
   )
+  ctx.sourceWorkspaceId = input.payload.source.workspaceId
 
   let installFolderId: string | null = null
   let folderManifest = input.payload.manifests.folders

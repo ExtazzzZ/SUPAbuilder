@@ -1,0 +1,3862 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "dto_version": "1.0.0",
+  "schemas": {
+    "TypedExpr": {
+      "$defs": {
+        "BinaryExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "binary",
+              "default": "binary",
+              "title": "Kind",
+              "type": "string"
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "*",
+                "/",
+                "//",
+                "%",
+                "**",
+                "==",
+                "!=",
+                ">",
+                "<",
+                ">=",
+                "<=",
+                "in",
+                "and",
+                "or",
+                "&&",
+                "||",
+                "|"
+              ],
+              "title": "Operator",
+              "type": "string"
+            },
+            "left": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Left"
+            },
+            "right": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Right"
+            }
+          },
+          "required": [
+            "operator",
+            "left",
+            "right"
+          ],
+          "title": "BinaryExpr",
+          "type": "object"
+        },
+        "CallExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "call",
+              "default": "call",
+              "title": "Kind",
+              "type": "string"
+            },
+            "function_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "title": "Function Id",
+              "type": "string"
+            },
+            "arguments": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "title": "Arguments",
+              "type": "array"
+            }
+          },
+          "required": [
+            "function_id",
+            "arguments"
+          ],
+          "title": "CallExpr",
+          "type": "object"
+        },
+        "CollectionExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "list",
+                "tuple"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "items": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "title": "Items",
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "title": "CollectionExpr",
+          "type": "object"
+        },
+        "ConditionalExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "conditional",
+              "default": "conditional",
+              "title": "Kind",
+              "type": "string"
+            },
+            "condition": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Condition"
+            },
+            "when_true": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "When True"
+            },
+            "when_false": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "When False"
+            }
+          },
+          "required": [
+            "condition",
+            "when_true",
+            "when_false"
+          ],
+          "title": "ConditionalExpr",
+          "type": "object"
+        },
+        "DictEntry": {
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Key"
+            },
+            "value": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ],
+          "title": "DictEntry",
+          "type": "object"
+        },
+        "DictExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "dict",
+              "default": "dict",
+              "title": "Kind",
+              "type": "string"
+            },
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/DictEntry"
+              },
+              "title": "Entries",
+              "type": "array"
+            }
+          },
+          "required": [
+            "entries"
+          ],
+          "title": "DictExpr",
+          "type": "object"
+        },
+        "IndexExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "index",
+              "default": "index",
+              "title": "Kind",
+              "type": "string"
+            },
+            "collection": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Collection"
+            },
+            "index": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Index"
+            }
+          },
+          "required": [
+            "collection",
+            "index"
+          ],
+          "title": "IndexExpr",
+          "type": "object"
+        },
+        "LambdaExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "lambda",
+              "default": "lambda",
+              "title": "Kind",
+              "type": "string"
+            },
+            "parameters": {
+              "items": {
+                "$ref": "#/$defs/LocalExpr"
+              },
+              "title": "Parameters",
+              "type": "array"
+            },
+            "body": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Body"
+            }
+          },
+          "required": [
+            "parameters",
+            "body"
+          ],
+          "title": "LambdaExpr",
+          "type": "object"
+        },
+        "LiteralSlotExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "literal_slot",
+              "default": "literal_slot",
+              "title": "Kind",
+              "type": "string"
+            },
+            "slot_id": {
+              "minLength": 1,
+              "title": "Slot Id",
+              "type": "string"
+            },
+            "declared_type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "str",
+                    "num",
+                    "list",
+                    "dict",
+                    "bool",
+                    "attachment",
+                    "expr",
+                    "date",
+                    "datetime"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "null",
+                  "type": "string"
+                }
+              ],
+              "title": "Declared Type"
+            }
+          },
+          "required": [
+            "slot_id",
+            "declared_type"
+          ],
+          "title": "LiteralSlotExpr",
+          "type": "object"
+        },
+        "LocalExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "local",
+              "default": "local",
+              "title": "Kind",
+              "type": "string"
+            },
+            "parameter_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "title": "Parameter Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "parameter_id"
+          ],
+          "title": "LocalExpr",
+          "type": "object"
+        },
+        "SymbolExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "symbol",
+              "default": "symbol",
+              "title": "Kind",
+              "type": "string"
+            },
+            "symbol_id": {
+              "minLength": 1,
+              "title": "Symbol Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol_id"
+          ],
+          "title": "SymbolExpr",
+          "type": "object"
+        },
+        "UnaryExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "unary",
+              "default": "unary",
+              "title": "Kind",
+              "type": "string"
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "not",
+                "!",
+                "~"
+              ],
+              "title": "Operator",
+              "type": "string"
+            },
+            "operand": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Operand"
+            }
+          },
+          "required": [
+            "operator",
+            "operand"
+          ],
+          "title": "UnaryExpr",
+          "type": "object"
+        }
+      },
+      "discriminator": {
+        "mapping": {
+          "binary": "#/$defs/BinaryExpr",
+          "call": "#/$defs/CallExpr",
+          "conditional": "#/$defs/ConditionalExpr",
+          "dict": "#/$defs/DictExpr",
+          "index": "#/$defs/IndexExpr",
+          "lambda": "#/$defs/LambdaExpr",
+          "list": "#/$defs/CollectionExpr",
+          "literal_slot": "#/$defs/LiteralSlotExpr",
+          "local": "#/$defs/LocalExpr",
+          "symbol": "#/$defs/SymbolExpr",
+          "tuple": "#/$defs/CollectionExpr",
+          "unary": "#/$defs/UnaryExpr"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SymbolExpr"
+        },
+        {
+          "$ref": "#/$defs/LiteralSlotExpr"
+        },
+        {
+          "$ref": "#/$defs/LocalExpr"
+        },
+        {
+          "$ref": "#/$defs/UnaryExpr"
+        },
+        {
+          "$ref": "#/$defs/BinaryExpr"
+        },
+        {
+          "$ref": "#/$defs/CallExpr"
+        },
+        {
+          "$ref": "#/$defs/ConditionalExpr"
+        },
+        {
+          "$ref": "#/$defs/CollectionExpr"
+        },
+        {
+          "$ref": "#/$defs/DictExpr"
+        },
+        {
+          "$ref": "#/$defs/IndexExpr"
+        },
+        {
+          "$ref": "#/$defs/LambdaExpr"
+        }
+      ]
+    },
+    "LogicalEdit": {
+      "$defs": {
+        "AssignmentEdit": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_source_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Expected Source Hash",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/SourceSpan"
+            },
+            "kind": {
+              "const": "assignment",
+              "default": "assignment",
+              "title": "Kind",
+              "type": "string"
+            },
+            "symbol_id": {
+              "minLength": 1,
+              "title": "Symbol Id",
+              "type": "string"
+            },
+            "mode": {
+              "default": "set",
+              "enum": [
+                "set",
+                "+",
+                "-"
+              ],
+              "title": "Mode",
+              "type": "string"
+            },
+            "operands": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "title": "Operands",
+              "type": "array"
+            }
+          },
+          "required": [
+            "expected_source_hash",
+            "target",
+            "symbol_id",
+            "operands"
+          ],
+          "title": "AssignmentEdit",
+          "type": "object"
+        },
+        "BinaryExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "binary",
+              "default": "binary",
+              "title": "Kind",
+              "type": "string"
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "*",
+                "/",
+                "//",
+                "%",
+                "**",
+                "==",
+                "!=",
+                ">",
+                "<",
+                ">=",
+                "<=",
+                "in",
+                "and",
+                "or",
+                "&&",
+                "||",
+                "|"
+              ],
+              "title": "Operator",
+              "type": "string"
+            },
+            "left": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Left"
+            },
+            "right": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Right"
+            }
+          },
+          "required": [
+            "operator",
+            "left",
+            "right"
+          ],
+          "title": "BinaryExpr",
+          "type": "object"
+        },
+        "CallExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "call",
+              "default": "call",
+              "title": "Kind",
+              "type": "string"
+            },
+            "function_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "title": "Function Id",
+              "type": "string"
+            },
+            "arguments": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "title": "Arguments",
+              "type": "array"
+            }
+          },
+          "required": [
+            "function_id",
+            "arguments"
+          ],
+          "title": "CallExpr",
+          "type": "object"
+        },
+        "CollectionExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "list",
+                "tuple"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "items": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "title": "Items",
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "title": "CollectionExpr",
+          "type": "object"
+        },
+        "ConditionalExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "conditional",
+              "default": "conditional",
+              "title": "Kind",
+              "type": "string"
+            },
+            "condition": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Condition"
+            },
+            "when_true": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "When True"
+            },
+            "when_false": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "When False"
+            }
+          },
+          "required": [
+            "condition",
+            "when_true",
+            "when_false"
+          ],
+          "title": "ConditionalExpr",
+          "type": "object"
+        },
+        "DictEntry": {
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Key"
+            },
+            "value": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ],
+          "title": "DictEntry",
+          "type": "object"
+        },
+        "DictExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "dict",
+              "default": "dict",
+              "title": "Kind",
+              "type": "string"
+            },
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/DictEntry"
+              },
+              "title": "Entries",
+              "type": "array"
+            }
+          },
+          "required": [
+            "entries"
+          ],
+          "title": "DictExpr",
+          "type": "object"
+        },
+        "GuardEdit": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_source_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Expected Source Hash",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/SourceSpan"
+            },
+            "kind": {
+              "const": "guard",
+              "default": "guard",
+              "title": "Kind",
+              "type": "string"
+            },
+            "expression": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Expression"
+            }
+          },
+          "required": [
+            "expected_source_hash",
+            "target",
+            "expression"
+          ],
+          "title": "GuardEdit",
+          "type": "object"
+        },
+        "IndexExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "index",
+              "default": "index",
+              "title": "Kind",
+              "type": "string"
+            },
+            "collection": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Collection"
+            },
+            "index": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Index"
+            }
+          },
+          "required": [
+            "collection",
+            "index"
+          ],
+          "title": "IndexExpr",
+          "type": "object"
+        },
+        "LambdaExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "lambda",
+              "default": "lambda",
+              "title": "Kind",
+              "type": "string"
+            },
+            "parameters": {
+              "items": {
+                "$ref": "#/$defs/LocalExpr"
+              },
+              "title": "Parameters",
+              "type": "array"
+            },
+            "body": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Body"
+            }
+          },
+          "required": [
+            "parameters",
+            "body"
+          ],
+          "title": "LambdaExpr",
+          "type": "object"
+        },
+        "LiteralSlotExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "literal_slot",
+              "default": "literal_slot",
+              "title": "Kind",
+              "type": "string"
+            },
+            "slot_id": {
+              "minLength": 1,
+              "title": "Slot Id",
+              "type": "string"
+            },
+            "declared_type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "str",
+                    "num",
+                    "list",
+                    "dict",
+                    "bool",
+                    "attachment",
+                    "expr",
+                    "date",
+                    "datetime"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "null",
+                  "type": "string"
+                }
+              ],
+              "title": "Declared Type"
+            }
+          },
+          "required": [
+            "slot_id",
+            "declared_type"
+          ],
+          "title": "LiteralSlotExpr",
+          "type": "object"
+        },
+        "LocalExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "local",
+              "default": "local",
+              "title": "Kind",
+              "type": "string"
+            },
+            "parameter_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "title": "Parameter Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "parameter_id"
+          ],
+          "title": "LocalExpr",
+          "type": "object"
+        },
+        "SourcePort": {
+          "additionalProperties": false,
+          "properties": {
+            "scenario_id": {
+              "title": "Scenario Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "source_path": {
+              "title": "Source Path",
+              "type": "string"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            },
+            "target_block_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Block Id"
+            },
+            "sequence": {
+              "minimum": 0,
+              "title": "Sequence",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scenario_id",
+            "block_id",
+            "source_path",
+            "name",
+            "target_block_id",
+            "sequence"
+          ],
+          "title": "SourcePort",
+          "type": "object"
+        },
+        "SourceSpan": {
+          "additionalProperties": false,
+          "properties": {
+            "scenario_id": {
+              "title": "Scenario Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "start": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Start",
+              "type": "integer"
+            },
+            "end": {
+              "default": 0,
+              "minimum": 0,
+              "title": "End",
+              "type": "integer"
+            },
+            "sequence": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Sequence",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scenario_id",
+            "block_id",
+            "path"
+          ],
+          "title": "SourceSpan",
+          "type": "object"
+        },
+        "SymbolExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "symbol",
+              "default": "symbol",
+              "title": "Kind",
+              "type": "string"
+            },
+            "symbol_id": {
+              "minLength": 1,
+              "title": "Symbol Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol_id"
+          ],
+          "title": "SymbolExpr",
+          "type": "object"
+        },
+        "TransitionEdit": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_source_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Expected Source Hash",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/SourceSpan"
+            },
+            "kind": {
+              "const": "transition",
+              "default": "transition",
+              "title": "Kind",
+              "type": "string"
+            },
+            "port": {
+              "$ref": "#/$defs/SourcePort"
+            },
+            "target_block_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Block Id"
+            }
+          },
+          "required": [
+            "expected_source_hash",
+            "target",
+            "port",
+            "target_block_id"
+          ],
+          "title": "TransitionEdit",
+          "type": "object"
+        },
+        "UnaryExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "unary",
+              "default": "unary",
+              "title": "Kind",
+              "type": "string"
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "not",
+                "!",
+                "~"
+              ],
+              "title": "Operator",
+              "type": "string"
+            },
+            "operand": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Operand"
+            }
+          },
+          "required": [
+            "operator",
+            "operand"
+          ],
+          "title": "UnaryExpr",
+          "type": "object"
+        }
+      },
+      "discriminator": {
+        "mapping": {
+          "assignment": "#/$defs/AssignmentEdit",
+          "guard": "#/$defs/GuardEdit",
+          "transition": "#/$defs/TransitionEdit"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/GuardEdit"
+        },
+        {
+          "$ref": "#/$defs/AssignmentEdit"
+        },
+        {
+          "$ref": "#/$defs/TransitionEdit"
+        }
+      ]
+    },
+    "AuthoringProjection": {
+      "$defs": {
+        "AssignmentEdit": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_source_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Expected Source Hash",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/SourceSpan"
+            },
+            "kind": {
+              "const": "assignment",
+              "default": "assignment",
+              "title": "Kind",
+              "type": "string"
+            },
+            "symbol_id": {
+              "minLength": 1,
+              "title": "Symbol Id",
+              "type": "string"
+            },
+            "mode": {
+              "default": "set",
+              "enum": [
+                "set",
+                "+",
+                "-"
+              ],
+              "title": "Mode",
+              "type": "string"
+            },
+            "operands": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "title": "Operands",
+              "type": "array"
+            }
+          },
+          "required": [
+            "expected_source_hash",
+            "target",
+            "symbol_id",
+            "operands"
+          ],
+          "title": "AssignmentEdit",
+          "type": "object"
+        },
+        "BinaryExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "binary",
+              "default": "binary",
+              "title": "Kind",
+              "type": "string"
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "*",
+                "/",
+                "//",
+                "%",
+                "**",
+                "==",
+                "!=",
+                ">",
+                "<",
+                ">=",
+                "<=",
+                "in",
+                "and",
+                "or",
+                "&&",
+                "||",
+                "|"
+              ],
+              "title": "Operator",
+              "type": "string"
+            },
+            "left": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Left"
+            },
+            "right": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Right"
+            }
+          },
+          "required": [
+            "operator",
+            "left",
+            "right"
+          ],
+          "title": "BinaryExpr",
+          "type": "object"
+        },
+        "CallExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "call",
+              "default": "call",
+              "title": "Kind",
+              "type": "string"
+            },
+            "function_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "title": "Function Id",
+              "type": "string"
+            },
+            "arguments": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "title": "Arguments",
+              "type": "array"
+            }
+          },
+          "required": [
+            "function_id",
+            "arguments"
+          ],
+          "title": "CallExpr",
+          "type": "object"
+        },
+        "CollectionExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "list",
+                "tuple"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "items": {
+              "items": {
+                "discriminator": {
+                  "mapping": {
+                    "binary": "#/$defs/BinaryExpr",
+                    "call": "#/$defs/CallExpr",
+                    "conditional": "#/$defs/ConditionalExpr",
+                    "dict": "#/$defs/DictExpr",
+                    "index": "#/$defs/IndexExpr",
+                    "lambda": "#/$defs/LambdaExpr",
+                    "list": "#/$defs/CollectionExpr",
+                    "literal_slot": "#/$defs/LiteralSlotExpr",
+                    "local": "#/$defs/LocalExpr",
+                    "symbol": "#/$defs/SymbolExpr",
+                    "tuple": "#/$defs/CollectionExpr",
+                    "unary": "#/$defs/UnaryExpr"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/SymbolExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LiteralSlotExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LocalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/UnaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/BinaryExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CallExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/ConditionalExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/CollectionExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/DictExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/IndexExpr"
+                  },
+                  {
+                    "$ref": "#/$defs/LambdaExpr"
+                  }
+                ]
+              },
+              "title": "Items",
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "title": "CollectionExpr",
+          "type": "object"
+        },
+        "ConditionalExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "conditional",
+              "default": "conditional",
+              "title": "Kind",
+              "type": "string"
+            },
+            "condition": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Condition"
+            },
+            "when_true": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "When True"
+            },
+            "when_false": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "When False"
+            }
+          },
+          "required": [
+            "condition",
+            "when_true",
+            "when_false"
+          ],
+          "title": "ConditionalExpr",
+          "type": "object"
+        },
+        "Diagnostic": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "title": "Code",
+              "type": "string"
+            },
+            "severity": {
+              "default": "error",
+              "enum": [
+                "error",
+                "warning",
+                "info"
+              ],
+              "title": "Severity",
+              "type": "string"
+            },
+            "span": {
+              "$ref": "#/$defs/SourceSpan"
+            },
+            "related_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Related Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "code",
+            "span"
+          ],
+          "title": "Diagnostic",
+          "type": "object"
+        },
+        "DictEntry": {
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Key"
+            },
+            "value": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ],
+          "title": "DictEntry",
+          "type": "object"
+        },
+        "DictExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "dict",
+              "default": "dict",
+              "title": "Kind",
+              "type": "string"
+            },
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/DictEntry"
+              },
+              "title": "Entries",
+              "type": "array"
+            }
+          },
+          "required": [
+            "entries"
+          ],
+          "title": "DictExpr",
+          "type": "object"
+        },
+        "GuardEdit": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_source_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Expected Source Hash",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/SourceSpan"
+            },
+            "kind": {
+              "const": "guard",
+              "default": "guard",
+              "title": "Kind",
+              "type": "string"
+            },
+            "expression": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Expression"
+            }
+          },
+          "required": [
+            "expected_source_hash",
+            "target",
+            "expression"
+          ],
+          "title": "GuardEdit",
+          "type": "object"
+        },
+        "IndexExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "index",
+              "default": "index",
+              "title": "Kind",
+              "type": "string"
+            },
+            "collection": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Collection"
+            },
+            "index": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Index"
+            }
+          },
+          "required": [
+            "collection",
+            "index"
+          ],
+          "title": "IndexExpr",
+          "type": "object"
+        },
+        "LambdaExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "lambda",
+              "default": "lambda",
+              "title": "Kind",
+              "type": "string"
+            },
+            "parameters": {
+              "items": {
+                "$ref": "#/$defs/LocalExpr"
+              },
+              "title": "Parameters",
+              "type": "array"
+            },
+            "body": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Body"
+            }
+          },
+          "required": [
+            "parameters",
+            "body"
+          ],
+          "title": "LambdaExpr",
+          "type": "object"
+        },
+        "LiteralSlotExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "literal_slot",
+              "default": "literal_slot",
+              "title": "Kind",
+              "type": "string"
+            },
+            "slot_id": {
+              "minLength": 1,
+              "title": "Slot Id",
+              "type": "string"
+            },
+            "declared_type": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "str",
+                    "num",
+                    "list",
+                    "dict",
+                    "bool",
+                    "attachment",
+                    "expr",
+                    "date",
+                    "datetime"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "null",
+                  "type": "string"
+                }
+              ],
+              "title": "Declared Type"
+            }
+          },
+          "required": [
+            "slot_id",
+            "declared_type"
+          ],
+          "title": "LiteralSlotExpr",
+          "type": "object"
+        },
+        "LocalExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "local",
+              "default": "local",
+              "title": "Kind",
+              "type": "string"
+            },
+            "parameter_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "title": "Parameter Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "parameter_id"
+          ],
+          "title": "LocalExpr",
+          "type": "object"
+        },
+        "SourcePort": {
+          "additionalProperties": false,
+          "properties": {
+            "scenario_id": {
+              "title": "Scenario Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "source_path": {
+              "title": "Source Path",
+              "type": "string"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            },
+            "target_block_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Block Id"
+            },
+            "sequence": {
+              "minimum": 0,
+              "title": "Sequence",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scenario_id",
+            "block_id",
+            "source_path",
+            "name",
+            "target_block_id",
+            "sequence"
+          ],
+          "title": "SourcePort",
+          "type": "object"
+        },
+        "SourceSpan": {
+          "additionalProperties": false,
+          "properties": {
+            "scenario_id": {
+              "title": "Scenario Id",
+              "type": "string"
+            },
+            "block_id": {
+              "title": "Block Id",
+              "type": "string"
+            },
+            "path": {
+              "title": "Path",
+              "type": "string"
+            },
+            "start": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Start",
+              "type": "integer"
+            },
+            "end": {
+              "default": 0,
+              "minimum": 0,
+              "title": "End",
+              "type": "integer"
+            },
+            "sequence": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Sequence",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scenario_id",
+            "block_id",
+            "path"
+          ],
+          "title": "SourceSpan",
+          "type": "object"
+        },
+        "SymbolExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "symbol",
+              "default": "symbol",
+              "title": "Kind",
+              "type": "string"
+            },
+            "symbol_id": {
+              "minLength": 1,
+              "title": "Symbol Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol_id"
+          ],
+          "title": "SymbolExpr",
+          "type": "object"
+        },
+        "TransitionEdit": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_source_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Expected Source Hash",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/SourceSpan"
+            },
+            "kind": {
+              "const": "transition",
+              "default": "transition",
+              "title": "Kind",
+              "type": "string"
+            },
+            "port": {
+              "$ref": "#/$defs/SourcePort"
+            },
+            "target_block_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Block Id"
+            }
+          },
+          "required": [
+            "expected_source_hash",
+            "target",
+            "port",
+            "target_block_id"
+          ],
+          "title": "TransitionEdit",
+          "type": "object"
+        },
+        "UnaryExpr": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "unary",
+              "default": "unary",
+              "title": "Kind",
+              "type": "string"
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "not",
+                "!",
+                "~"
+              ],
+              "title": "Operator",
+              "type": "string"
+            },
+            "operand": {
+              "discriminator": {
+                "mapping": {
+                  "binary": "#/$defs/BinaryExpr",
+                  "call": "#/$defs/CallExpr",
+                  "conditional": "#/$defs/ConditionalExpr",
+                  "dict": "#/$defs/DictExpr",
+                  "index": "#/$defs/IndexExpr",
+                  "lambda": "#/$defs/LambdaExpr",
+                  "list": "#/$defs/CollectionExpr",
+                  "literal_slot": "#/$defs/LiteralSlotExpr",
+                  "local": "#/$defs/LocalExpr",
+                  "symbol": "#/$defs/SymbolExpr",
+                  "tuple": "#/$defs/CollectionExpr",
+                  "unary": "#/$defs/UnaryExpr"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SymbolExpr"
+                },
+                {
+                  "$ref": "#/$defs/LiteralSlotExpr"
+                },
+                {
+                  "$ref": "#/$defs/LocalExpr"
+                },
+                {
+                  "$ref": "#/$defs/UnaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/BinaryExpr"
+                },
+                {
+                  "$ref": "#/$defs/CallExpr"
+                },
+                {
+                  "$ref": "#/$defs/ConditionalExpr"
+                },
+                {
+                  "$ref": "#/$defs/CollectionExpr"
+                },
+                {
+                  "$ref": "#/$defs/DictExpr"
+                },
+                {
+                  "$ref": "#/$defs/IndexExpr"
+                },
+                {
+                  "$ref": "#/$defs/LambdaExpr"
+                }
+              ],
+              "title": "Operand"
+            }
+          },
+          "required": [
+            "operator",
+            "operand"
+          ],
+          "title": "UnaryExpr",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "dto_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Dto Version",
+          "type": "string"
+        },
+        "source_hash": {
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "edits": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "assignment": "#/$defs/AssignmentEdit",
+                "guard": "#/$defs/GuardEdit",
+                "transition": "#/$defs/TransitionEdit"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/GuardEdit"
+              },
+              {
+                "$ref": "#/$defs/AssignmentEdit"
+              },
+              {
+                "$ref": "#/$defs/TransitionEdit"
+              }
+            ]
+          },
+          "title": "Edits",
+          "type": "array"
+        },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "title": "Diagnostics",
+          "type": "array"
+        },
+        "publishable": {
+          "const": false,
+          "default": false,
+          "title": "Publishable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_hash",
+        "edits",
+        "diagnostics"
+      ],
+      "title": "AuthoringProjection",
+      "type": "object"
+    }
+  }
+}

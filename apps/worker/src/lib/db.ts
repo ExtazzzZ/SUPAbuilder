@@ -1,4 +1,8 @@
-import { flowService, flowVersionService } from "@chatbotx.io/business"
+import {
+  flowService,
+  flowVersionService,
+  supacrmSourceBindingService,
+} from "@chatbotx.io/business"
 import { findOrFail } from "@chatbotx.io/database/client"
 import {
   contactInboxModel,
@@ -55,31 +59,47 @@ export async function detectFlowVersion(props: {
   flowVersion: FlowVersionModel
   useLatestFlowVersion: boolean
 }> {
-  let flowVersion: FlowVersionModel | null | undefined = null
-  if (props.flowVersionId) {
-    flowVersion = await flowVersionService.findByIdForWorkspace({
-      versionId: props.flowVersionId,
+  return await supacrmSourceBindingService.withLegacyFlow(
+    {
       workspaceId: props.workspaceId,
-    })
-  } else if (props.flowId) {
-    const flow = await flowService.findActiveById({
-      id: props.flowId,
-      workspaceId: props.workspaceId,
-    })
-    if (flow?.currentVersionId) {
-      flowVersion = await flowVersionService.findByIdForWorkspace({
-        versionId: flow.currentVersionId,
-        workspaceId: props.workspaceId,
-      })
-    }
-  }
+      flowId: props.flowId,
+      operation: "execute",
+    },
+    async (tx) => {
+      let flowVersion: FlowVersionModel | null | undefined = null
+      if (props.flowVersionId) {
+        flowVersion = await flowVersionService.findByIdForWorkspace({
+          versionId: props.flowVersionId,
+          workspaceId: props.workspaceId,
+          tx,
+        })
+      } else if (props.flowId) {
+        const flow = await flowService.findActiveById({
+          id: props.flowId,
+          workspaceId: props.workspaceId,
+          tx,
+        })
+        if (flow?.currentVersionId) {
+          flowVersion = await flowVersionService.findByIdForWorkspace({
+            versionId: flow.currentVersionId,
+            workspaceId: props.workspaceId,
+            tx,
+          })
+        }
+      }
 
-  if (!flowVersion) {
-    throw new SdkException("FlowVersion not found")
-  }
+      if (
+        !flowVersion ||
+        flowVersion.flowId !== props.flowId ||
+        flowVersion.workspaceId !== props.workspaceId
+      ) {
+        throw new SdkException("FlowVersion not found")
+      }
 
-  return {
-    flowVersion,
-    useLatestFlowVersion: !props.flowVersionId,
-  }
+      return {
+        flowVersion,
+        useLatestFlowVersion: !props.flowVersionId,
+      }
+    },
+  )
 }

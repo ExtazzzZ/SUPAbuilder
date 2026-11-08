@@ -16,6 +16,22 @@ import { z } from "zod"
  * builder's own request validation.
  */
 export const incomingApiMessageSchema = z.object({
+  crmFulfillmentContinuation: z
+    .strictObject({
+      fulfillmentRef: z.uuid(),
+      flowId: z.string().regex(/^\d+$/),
+      flowVersionId: z.string().regex(/^\d+$/),
+      terminalEventId: z.string().startsWith("fulfillment-wait:"),
+      blockId: z.string().min(1).max(64),
+    })
+    .optional(),
+  flowId: z
+    .string()
+    .regex(/^\d+$/)
+    .optional()
+    .describe(
+      "Workspace flow to start for a new contact or /start; pending input takes priority.",
+    ),
   contact: z
     .object({
       sourceId: z
@@ -143,6 +159,20 @@ export const receiveMessage = ({
     name: attachment.name,
   }))
 
+  // UI read anchor is carried by an authenticated CRM execution event only.
+  // Nested author/client attributes cannot mint or override it, and it does
+  // not participate in continuation authorization.
+  const { crmFulfillmentExecution: _untrustedExecution, ...safeAttributes } =
+    validated.message.contentAttributes ?? {}
+  const continuation = validated.crmFulfillmentContinuation
+  const execution =
+    contact.sourceId.startsWith("supacrm:") &&
+    continuation?.terminalEventId === validated.message.sourceId
+      ? {
+          flowId: continuation.flowId,
+          fulfillmentRef: continuation.fulfillmentRef,
+        }
+      : undefined
   const message: IncomingMessage = {
     sourceId: validated.message.sourceId,
     messageType: messageTypes.enum.incoming,
@@ -151,13 +181,23 @@ export const receiveMessage = ({
         ? contentTypes.enum.location
         : contentTypes.enum.text,
     text: validated.message.text ?? undefined,
-    contentAttributes: validated.message.contentAttributes,
+    contentAttributes: {
+      ...safeAttributes,
+      ...(execution ? { crmFulfillmentExecution: execution } : {}),
+    },
     attachments,
   }
 
   return Promise.resolve({
     message,
     contact,
+    entryFlowId: validated.flowId,
+    crmFulfillmentContinuation: contact.sourceId.startsWith("supacrm:")
+      ? validated.crmFulfillmentContinuation
+      : undefined,
+    crmNavigation: contact.sourceId.startsWith("supacrm:")
+      ? { sourceEventId: validated.message.sourceId }
+      : undefined,
     postbackAction: validated.postbackPayload ?? null,
     quickReplyAction: null,
     ref: null,

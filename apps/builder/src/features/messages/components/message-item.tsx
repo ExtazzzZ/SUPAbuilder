@@ -54,6 +54,7 @@ import { useTranslations } from "next-intl"
 import { useState } from "react"
 import type { AttachmentResource } from "@/features/attachments/schema/resource"
 import { useAttachmentSource } from "@/features/attachments/utils"
+import { FulfillmentStatusCard } from "@/features/flows/supacrm-fulfillment/fulfillment-status-card"
 import {
   getThreadControlActivity,
   getThreadControlContextCard,
@@ -209,6 +210,12 @@ export const MessageItem = (props: MessageItemProps) => {
           variant === "full" && "mx-auto",
         )}
       >
+        {!(guestDisplay || isDeleted) && (
+          <FulfillmentStatusCard
+            attributes={message.contentAttributes}
+            workspaceId={message.workspaceId}
+          />
+        )}
         {storyReply && <StoryReplyContext story={storyReply.story} />}
         {isPartnerEcho && (
           <span className="flex items-center gap-1 self-end text-muted-foreground text-xs">

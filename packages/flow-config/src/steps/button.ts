@@ -3,7 +3,7 @@ import { z } from "zod"
 import { countMessageCharacters } from "../channel-rules/characters"
 import { actionSteps } from "../shared"
 import { flowValidationCodes } from "../validation-codes"
-import { BUTTON_LABEL_MAX } from "./button-limits"
+import { BUTTON_LABEL_SCHEMA_MAX } from "./button-limits"
 import { openMiniAppStepSchema } from "./open-mini-app"
 import { openWebsiteStepSchema } from "./open-website"
 import { startAnotherNodeStepSchema } from "./start-another-node"
@@ -22,24 +22,33 @@ export const buttonTypes = z.enum([
 ])
 export type ButtonType = z.infer<typeof buttonTypes>
 
-export { BUTTON_LABEL_MAX } from "./button-limits"
+export { BUTTON_LABEL_MAX, BUTTON_LABEL_SCHEMA_MAX } from "./button-limits"
 
 export const buttonStepSchema = z
   .object({
     id: zodBigintAsString().describe(
       "Button id (numeric string). Also the `sourceHandle` of the edge that routes the button to its next node.",
     ),
+    row: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(99)
+      .optional()
+      .describe(
+        "Номер строки клавиатуры с нуля. Только соседние кнопки с одинаковым явным номером находятся в одной строке; без номера кнопка занимает отдельную строку.",
+      ),
     label: z
       .string()
       .trim()
       .min(1)
       .refine(
-        (value) => countMessageCharacters(value) <= BUTTON_LABEL_MAX,
+        (value) => countMessageCharacters(value) <= BUTTON_LABEL_SCHEMA_MAX,
         flowValidationCodes.constraintExceeded,
       )
       .meta({
-        description: `Button label shown to the contact (max ${BUTTON_LABEL_MAX} characters).`,
-        maxLength: BUTTON_LABEL_MAX,
+        description: `Button label shown to the contact (max ${BUTTON_LABEL_SCHEMA_MAX} characters).`,
+        maxLength: BUTTON_LABEL_SCHEMA_MAX,
       }),
   })
   .and(

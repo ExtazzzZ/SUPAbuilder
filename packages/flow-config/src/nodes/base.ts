@@ -1,5 +1,6 @@
 import { createId, zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
+import { flowEditorMetadataSchema } from "../editor-metadata"
 
 export const nodeTypeSchema = z.enum([
   "sendMessage",
@@ -44,6 +45,11 @@ export const baseNodeSchema = z.object({
 export type BaseNodeSchema = z.infer<typeof baseNodeSchema>
 
 export const baseNodeDataSchema = z.object({
+  editorMetadata: flowEditorMetadataSchema
+    .optional()
+    .describe(
+      "Optional editor-only section membership; never an executable action.",
+    ),
   name: z
     .string()
     .trim()

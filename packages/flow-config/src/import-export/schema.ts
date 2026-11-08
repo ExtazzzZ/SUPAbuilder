@@ -5,6 +5,7 @@ import {
   zodErrorToFlowAuthoringErrors,
 } from "../authoring/errors"
 import { refineStepsByChannel } from "../channel-rules/channel-step-refinement"
+import { refineFlowEditorSections } from "../editor-metadata"
 import { zodFieldName } from "../field-reference"
 import { edgeSchema, flowVersionSchema } from "../nodes/index"
 
@@ -39,7 +40,10 @@ export const flowExportedFlowSchema = z.object({
   active: z.boolean(),
   enableInInbox: z.boolean(),
   startNodeId: z.string(),
-  nodes: z.array(flowVersionSchema).superRefine(refineStepsByChannel),
+  nodes: z
+    .array(flowVersionSchema)
+    .superRefine(refineStepsByChannel)
+    .superRefine(refineFlowEditorSections),
   edges: z.array(edgeSchema),
 })
 export type FlowExportedFlow = z.infer<typeof flowExportedFlowSchema>

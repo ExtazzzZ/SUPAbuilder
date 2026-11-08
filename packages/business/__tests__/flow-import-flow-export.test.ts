@@ -55,7 +55,13 @@ vi.mock("@chatbotx.io/database/schema", () => ({
   flowVersionModel,
 }))
 
-vi.mock("@chatbotx.io/flow-config", () => ({
+vi.mock("@chatbotx.io/flow-config", async (original) => ({
+  assertDraftWrappers: (
+    await original<typeof import("@chatbotx.io/flow-config")>()
+  ).assertDraftWrappers,
+  detachImportedReceiptEmailTemplates: (
+    await original<typeof import("@chatbotx.io/flow-config")>()
+  ).detachImportedReceiptEmailTemplates,
   remapFlowGraphReferences: mockRemapFlowGraphReferences,
   sendMessageNodeDefaultFn: vi.fn(() => ({ id: "default-node" })),
   // flowService.list's startType filtering imports stepTypes for the
@@ -64,7 +70,8 @@ vi.mock("@chatbotx.io/flow-config", () => ({
   stepTypes: { enum: { sendWaTemplateMessage: "sendWaTemplateMessage" } },
 }))
 
-vi.mock("@chatbotx.io/utils", () => ({
+vi.mock("@chatbotx.io/utils", async (original) => ({
+  ...(await original<typeof import("@chatbotx.io/utils")>()),
   createId: mockCreateId,
 }))
 
@@ -508,4 +515,60 @@ describe("flowService.importFlowExport", () => {
       expect.objectContaining({ folderId: null }),
     )
   })
+})
+
+test.each([
+  "ws-1",
+  "ws-foreign",
+])("Email pin in flow import from %s", async (sourceWorkspaceId) => {
+  const real = await vi.importActual<typeof import("@chatbotx.io/flow-config")>(
+    "@chatbotx.io/flow-config",
+  )
+  let nextId = 1000
+  mockCreateId.mockImplementation(() => String(nextId++))
+  const email = real.createSupacrmEmailNode({ nodeProps: { id: "101" } })
+  const source = {
+    kind: "receiptEmail",
+    flowId: "10",
+    flowVersionId: "20",
+    nodeId: "30",
+  } as const
+  const bound = real.applyReceiptEmailTemplate(email, {
+    source,
+    snapshot: real.getSupacrmForm(email.data.details),
+    overrides: {},
+  })
+  mockDbTransaction.mockImplementation((work) => work(transaction))
+  mockResolveByNameAndType.mockResolvedValue({
+    idMap: new Map(),
+    createdIds: [],
+  })
+  mockBotFieldResolveByNameAndType.mockResolvedValue({
+    idMap: new Map(),
+    createdIds: [],
+  })
+  mockRemapFlowGraphReferences.mockImplementation((graph) => graph)
+  mockInsertValues.mockClear()
+  const result = await flowService.importFlowExport({
+    workspaceId: "ws-1",
+    sourceWorkspaceId,
+    name: "Почта",
+    active: false,
+    enableInInbox: false,
+    startNodeId: "101",
+    nodes: [bound],
+    edges: [],
+    customFields: {},
+    botFields: {},
+  })
+  const saved = mockInsertValues.mock.calls
+    .map(([value]) => value)
+    .find((value) => value.nodes)?.nodes[0]
+  expect(saved.data.details.supacrmForm).toEqual(bound.data.details.supacrmForm)
+  if (sourceWorkspaceId === "ws-1") {
+    expect(saved.data.details.supacrmFormTemplate.source).toEqual(source)
+  } else {
+    expect(saved.data.details.supacrmFormTemplate).toBeUndefined()
+    expect(result.templateWarnings).toHaveLength(1)
+  }
 })

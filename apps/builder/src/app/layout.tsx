@@ -37,7 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
       {
         rel: "icon",
         url: faviconUrl ?? "/brand/favicon/favicon-96x96.png",
-        type: "image/png",
+        type: faviconUrl?.endsWith(".svg") ? "image/svg+xml" : "image/png",
       },
       {
         rel: "apple-touch-icon",

@@ -1,5 +1,41 @@
 import { type ChannelType, channelTypes } from "@chatbotx.io/utils/channel"
 import { z } from "zod"
+import {
+  receiptEmailTemplateSchema,
+  refineReceiptEmailTemplate,
+} from "../extensions/receipt-email-template"
+import {
+  refineSupacrmCheckout,
+  supacrmCheckoutSchema,
+} from "../extensions/supacrm-checkout"
+import {
+  refineSupacrmDataRequest,
+  supacrmDataRequestSchema,
+} from "../extensions/supacrm-data-request"
+import {
+  refineSupacrmForm,
+  supacrmFormSchema,
+} from "../extensions/supacrm-form"
+import {
+  refineSupacrmFulfillment,
+  supacrmFulfillmentSchema,
+} from "../extensions/supacrm-fulfillment"
+import {
+  refineSupacrmOperator,
+  supacrmOperatorSchema,
+} from "../extensions/supacrm-operator"
+import {
+  refineSupacrmProduct,
+  supacrmProductSchema,
+} from "../extensions/supacrm-product"
+import {
+  refineSupacrmReminder,
+  supacrmReminderSchema,
+} from "../extensions/supacrm-reminder"
+import {
+  refineSupacrmVariable,
+  supacrmVariableSchema,
+} from "../extensions/supacrm-variable"
 import { actionSteps } from "../shared"
 import { buttonStepSchema } from "../steps/button"
 import {
@@ -49,6 +85,20 @@ export const sendMessageNodeSchema = baseNodeSchema.extend({
   data: baseNodeDataSchema.extend({
     details: z
       .object({
+        supacrmDataRequest: supacrmDataRequestSchema.optional(),
+        supacrmReminder: supacrmReminderSchema.optional(),
+        supacrmOperator: supacrmOperatorSchema.optional(),
+        supacrmProduct: supacrmProductSchema.optional(),
+        supacrmCheckout: supacrmCheckoutSchema.optional(),
+        supacrmFulfillment: supacrmFulfillmentSchema.optional(),
+        supacrmForm: supacrmFormSchema.optional(),
+        supacrmFormTemplate: receiptEmailTemplateSchema.optional(),
+        supacrmVariable: supacrmVariableSchema.optional(),
+        presentation: z
+          .object({
+            updateMode: z.enum(["send_new", "edit_previous"]),
+          })
+          .optional(),
         beforeStep: chooseChannelStepSchema,
         steps: z.array(
           z.discriminatedUnion("stepType", [
@@ -83,7 +133,16 @@ export const sendMessageNodeSchema = baseNodeSchema.extend({
           ),
         quickReplySettings: quickReplySettingsSchema.optional(),
       })
-      .superRefine(refineQuickReplySettings),
+      .superRefine(refineQuickReplySettings)
+      .superRefine(refineSupacrmReminder)
+      .superRefine(refineSupacrmDataRequest)
+      .superRefine(refineSupacrmOperator)
+      .superRefine(refineSupacrmProduct)
+      .superRefine(refineSupacrmForm)
+      .superRefine(refineSupacrmCheckout)
+      .superRefine(refineSupacrmFulfillment)
+      .superRefine(refineReceiptEmailTemplate)
+      .superRefine(refineSupacrmVariable),
   }),
 })
 export type SendMessageNodeSchema = z.infer<typeof sendMessageNodeSchema>

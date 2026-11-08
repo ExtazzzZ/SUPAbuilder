@@ -980,6 +980,8 @@ export type MessageLocationEntity = {
 export type MessageButtonTemplate = {
   id: string
   label: string
+  /** Номер строки с нуля; отсутствие сохраняет отдельную строку кнопки. */
+  row?: number
 } & (
   | {
       buttonType: "url"

@@ -16,6 +16,7 @@ import {
   resolveCollectionStep,
   resolveMediaUrl,
   resolveTenantSettings,
+  supacrmFulfillmentService,
 } from "@chatbotx.io/business"
 import { logProviderErrorForChannel } from "@chatbotx.io/business/error-log"
 import { wrapOpenLinkUrl } from "@chatbotx.io/business/open-link"
@@ -47,7 +48,9 @@ import {
   getChannelFlowPolicy,
   isBulkOutboundMetadata,
   isProactiveOutboundMetadata,
+  mergeButtonGroups,
   messageEventTypeSchema,
+  parseSupacrmFulfillmentCommand,
   type SendCardStepSchema,
   stepSupport,
   stepTypes,
@@ -63,7 +66,6 @@ import {
 } from "@chatbotx.io/sdk"
 import { createId } from "@chatbotx.io/utils"
 import { resolveStackFrames } from "@chatbotx.io/utils/error-log"
-import { resolveContactVariablesDeep } from "@chatbotx.io/variables"
 import type {
   ChatJobSendChatMessage,
   ChatJobSendFlowStep,
@@ -75,6 +77,7 @@ import {
   settleCommentAutomationFailure,
 } from "../../lib/comment-automation-anchor"
 import { logger } from "../../lib/logger"
+import { resolveAuthoredChannelStep } from "../resolve-authored-channel-step"
 import { resolveMiniAppLinks } from "../utils/mini-app-buttons"
 import { mapStepButtons } from "../utils/step-buttons"
 import { resolveStoredStepContent } from "../utils/stored-step-content"
@@ -200,6 +203,7 @@ export const convertButtonsToTemplate = (props: {
       return {
         id: button.id,
         label: button.label,
+        ...(button.row === undefined ? {} : { row: button.row }),
         buttonType: "url",
         url: appendCodeToMagicLink(button.beforeStep.url, buttonPayload),
         postback: buttonPayload,
@@ -210,6 +214,7 @@ export const convertButtonsToTemplate = (props: {
       id: button.id,
       buttonType: "postback",
       label: button.label,
+      ...(button.row === undefined ? {} : { row: button.row }),
       postback: buttonPayload,
     }
   })
@@ -459,6 +464,8 @@ async function resolveProductMessageForStep(props: {
 }
 
 export async function sendFlowStep({
+  operationId,
+  crmNavigation,
   conversationId,
   contactInboxId,
   flowId,
@@ -490,6 +497,31 @@ export async function sendFlowStep({
   if (!targetContactInbox) {
     return
   }
+  let crmFulfillmentOrigin:
+    | Awaited<ReturnType<typeof supacrmFulfillmentService.origin>>
+    | undefined
+  if (
+    targetContactInbox.channel === "api" &&
+    step.stepType === "sendText" &&
+    parseSupacrmFulfillmentCommand(step.text)
+  ) {
+    if (!executedFlowVersionId) {
+      throw new Error("fulfillment_origin_missing")
+    }
+    flowVersionId = executedFlowVersionId
+    crmFulfillmentOrigin = await supacrmFulfillmentService.origin({
+      workspaceId: conversation.workspaceId,
+      inboxId: targetContactInbox.inboxId,
+      contactId: conversation.contactId,
+      conversationId: conversation.id,
+      flowId,
+      flowVersionId,
+      stepId: step.id,
+      marker: step.text,
+      portIds: (quickReplies ?? []).map((port) => port.id),
+    })
+  }
+
   const isBulkOutbound = isBulkOutboundMetadata(metadata, isBulkBroadcast)
 
   // What the job actually carried. `metadata` is the carrier the button
@@ -646,16 +678,16 @@ export async function sendFlowStep({
   // point — every string leaf is copy an author wrote for a contact to read.
   // Code- or data-carrying steps (external request, execute JavaScript) resolve
   // through their own handlers and deliberately leave it off.
-  const authoredStep = await resolveContactVariablesDeep(
+  const authoredStep = await resolveAuthoredChannelStep(
     conversation.contactId,
     step,
+    targetContactInbox.channel,
     {
       contactInbox: targetContactInbox,
       conversation,
       ...(appointmentId ? { appointmentId } : {}),
       ...(sentByUserId ? { sentByUserId } : {}),
     },
-    { spintax: true },
   )
 
   // A collection becomes its product cards for this contact only now, after
@@ -807,10 +839,10 @@ export async function sendFlowStep({
           })
         : []
 
-    const displayButtons = [
-      ...canonicalStepButtons,
-      ...(canonicalQuickReplies ?? []),
-    ]
+    const displayButtons = mergeButtonGroups(
+      canonicalStepButtons,
+      canonicalQuickReplies ?? [],
+    )
 
     if (preparedProductMessage) {
       contentAttributes = {
@@ -979,6 +1011,9 @@ export async function sendFlowStep({
           true,
         )
       : sendFlowStepToChannel({
+          operationId,
+          crmNavigation,
+          crmFulfillmentOrigin,
           conversation,
           contactInbox: targetContactInbox,
           flowId,
@@ -987,7 +1022,12 @@ export async function sendFlowStep({
           productMessage: preparedProductMessage?.message,
           metadata,
           richResponse,
-          quickReplies: canonicalQuickReplies,
+          // API-мост передаёт клавиатуру в quickReplies: включаем кнопки шага
+          // с уже закодированными переходами и ссылками, как в истории сообщения.
+          quickReplies:
+            targetContactInbox.channel === channelTypes.enum.api
+              ? displayButtons
+              : canonicalQuickReplies,
           messageId: message?.id,
           messageCreatedAt: message?.createdAt,
           sendFrom,

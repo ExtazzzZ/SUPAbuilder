@@ -43,7 +43,7 @@ import { useWorkspaceId } from "@/hooks/routing"
 import RecursiveDropdownMenu from "../components/recursive-dropdown-menu"
 import { resolveFlowValidationCodeKey } from "../flow-validation-message"
 import { allSteps, DynamicStepEditor } from "../steps"
-import { ButtonStepEditor } from "../steps/button/editor"
+import { ButtonStepEditor, buttonGridStyle } from "../steps/button/editor"
 import { ErrorAlert } from "../steps/error-alert"
 import { SpreadsheetDialogProvider } from "../steps/spreadsheet/components/spreadsheet-dialog-context"
 import { useFlowTemplate } from "../stores/flow-template-store-provider"
@@ -104,6 +104,7 @@ const replaceIds = (data: unknown): unknown => {
 const NodeEditorQuickReplies = ({ nodeId }: { nodeId: string }) => {
   const t = useTranslations()
   const { control } = useFormContext()
+  const watchedQuickReplies = useWatch({ name: "quickReplies" }) ?? []
 
   const {
     fields: quickReplies,
@@ -123,11 +124,15 @@ const NodeEditorQuickReplies = ({ nodeId }: { nodeId: string }) => {
         }
         value={quickReplies}
       >
-        <SortableContent className="contents gap-2">
+        <SortableContent className="grid w-full grid-cols-6 gap-2">
           {quickReplies.map((field, index) => (
             <SortableItem
               key={field.id}
-              render={<ButtonStepEditor parentName={`quickReplies.${index}`} />}
+              render={
+                <div style={buttonGridStyle(watchedQuickReplies, index)}>
+                  <ButtonStepEditor parentName={`quickReplies.${index}`} />
+                </div>
+              }
               value={field.id}
             />
           ))}
@@ -411,6 +416,30 @@ export const NodeEditor = memo((props: NodeEditorProps) => {
   return (
     <SpreadsheetDialogProvider>
       <Form {...form}>
+        {nodeType === "sendMessage" && (
+          <label className="flex flex-col gap-1 text-sm">
+            Отображение сообщения в SUPAcrm
+            <select
+              className="rounded border p-2"
+              value={form.watch("presentation.updateMode") ?? ""}
+              onChange={(event) => {
+                form.setValue(
+                  "presentation",
+                  event.target.value
+                    ? { updateMode: event.target.value }
+                    : undefined,
+                  { shouldDirty: true, shouldValidate: true },
+                )
+              }}
+            >
+              <option value="">Совместимость с прежней версией</option>
+              <option value="send_new">Отправить новое сообщение</option>
+              <option value="edit_previous">
+                Изменить выбранное предыдущее сообщение
+              </option>
+            </select>
+          </label>
+        )}
         {"beforeStep" in upgradedNodeDetails &&
           upgradedNodeDetails.beforeStep && (
             <DynamicStepEditor

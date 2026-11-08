@@ -1,0 +1,54 @@
+.wordmark {
+  display: block;
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+  margin-inline: auto;
+  overflow: visible;
+  color: var(--foreground);
+}
+
+.brick {
+  fill: currentColor;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: assemble 680ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--delay);
+}
+
+.accent {
+  color: var(--primary);
+}
+
+.stud {
+  fill: white;
+  fill-opacity: 0.24;
+  stroke: black;
+  stroke-opacity: 0.12;
+  stroke-width: 0.35;
+}
+
+@keyframes assemble {
+  0% {
+    opacity: 0;
+    transform: translate(var(--from-x), var(--from-y))
+      rotate(var(--from-rotation)) scale(0.75);
+  }
+  65% {
+    opacity: 1;
+    transform: translate(0, 2px) rotate(0) scale(1.04);
+  }
+  82% {
+    transform: translate(0, -1px) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brick {
+    animation: none;
+  }
+}

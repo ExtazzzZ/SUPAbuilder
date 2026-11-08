@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
-  BUTTON_LABEL_MAX,
+  BUTTON_LABEL_SCHEMA_MAX,
   buttonStepDefaultFn,
   buttonStepSchema,
   chooseChannelStepDefaultFn,
@@ -75,6 +75,10 @@ describe("sendMessage quick replies", () => {
     const viewCatalogStep = sendViewCatalogStepDefaultFn({ text: "Browse" })
     const multipleImagesStep = sendMultipleImagesStepDefaultFn()
 
+    expect(isQuickReplyCarrierStep("api", textStep)).toBe(true)
+    expect(isQuickReplyCarrierStep("api", imageStep)).toBe(true)
+    expect(isQuickReplyCarrierStep("api", multipleImagesStep)).toBe(false)
+    expect(isQuickReplyCarrierStep("api", carouselStep)).toBe(false)
     expect(isQuickReplyCarrierStep("telegram", textStep)).toBe(true)
     expect(isQuickReplyCarrierStep("telegram", imageStep)).toBe(true)
     expect(isQuickReplyCarrierStep("telegram", videoStep)).toBe(true)
@@ -104,17 +108,17 @@ describe("sendMessage quick replies", () => {
   test("enforces quick reply label and count limits", () => {
     expect(
       buttonStepSchema.safeParse(
-        buttonStepDefaultFn({ label: "a".repeat(BUTTON_LABEL_MAX) }),
+        buttonStepDefaultFn({ label: "a".repeat(BUTTON_LABEL_SCHEMA_MAX) }),
       ).success,
     ).toBe(true)
     expect(
       buttonStepSchema.safeParse(
-        buttonStepDefaultFn({ label: "a".repeat(BUTTON_LABEL_MAX + 1) }),
+        buttonStepDefaultFn({ label: "a".repeat(BUTTON_LABEL_SCHEMA_MAX + 1) }),
       ).success,
     ).toBe(false)
     expect(
       buttonStepSchema.safeParse(
-        buttonStepDefaultFn({ label: "😀".repeat(BUTTON_LABEL_MAX) }),
+        buttonStepDefaultFn({ label: "😀".repeat(BUTTON_LABEL_SCHEMA_MAX) }),
       ).success,
     ).toBe(true)
 

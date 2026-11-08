@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { refineStepsByChannel } from "./channel-rules/channel-step-refinement"
+import { refineFlowEditorSections } from "./editor-metadata"
 import { edgeSchema, flowVersionSchema } from "./nodes"
 
 /**
@@ -11,6 +12,7 @@ export const publishFlowSchema = z.object({
   nodes: z
     .array(flowVersionSchema)
     .superRefine(refineStepsByChannel)
+    .superRefine(refineFlowEditorSections)
     .describe("Raw flow node graph, as sent by the builder UI."),
   edges: z
     .array(edgeSchema)

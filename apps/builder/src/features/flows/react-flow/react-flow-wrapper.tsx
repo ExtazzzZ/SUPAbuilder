@@ -1,22 +1,23 @@
 import {
   applyRouteUpdatesInNodes,
+  assignFlowSection,
   type FlowNode,
   type FlowRouteUpdate,
+  type FlowSection,
+  getFlowNodeSection,
   nodeTypeSchema,
+  removeFlowSection,
   sendMessageNodeDefaultFn,
 } from "@chatbotx.io/flow-config"
 import { useDebouncedCallback } from "@chatbotx.io/ui/hooks/use-debounced-callback"
 import {
-  Background,
   type Connection,
-  Controls,
   type Edge,
   type FinalConnectionState,
   MarkerType,
   type Node,
   type NodeChange,
   Panel,
-  ReactFlow,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -32,8 +33,18 @@ import {
   useState,
 } from "react"
 import { toast } from "sonner"
+import { client } from "@/lib/orpc/orpc"
 import { updateDraftFlowVersionAction } from "../actions/update-draft-flow-version-action"
 import type { UpdateDraftFlowVersionSchema } from "../schema/action"
+import {
+  createReceiptEmailTemplateAcknowledgement,
+  createReceiptEmailTemplateDraftMutation,
+} from "../supacrm-form/template-draft"
+import { useReceiptEmailTemplateDraft } from "../supacrm-form/template-draft-context"
+import {
+  NativeSourceCanvasView,
+  type NativeSourceCanvasViewProps,
+} from "../supacrm-source/native/native-source-canvas-view"
 import {
   createDeleteNode,
   type DeleteSaveResult,
@@ -43,11 +54,16 @@ import {
   type DuplicateSaveResult,
 } from "./duplicate-node-orchestrator"
 import { FlowMutationProvider } from "./flow-mutation-context"
-import { NodeViewer } from "./nodes/viewer"
-import AddNodeButton from "./panel-buttons/add-node-button"
-import FocusButton from "./panel-buttons/focus-button"
-import ZoomInButton from "./panel-buttons/zoom-in-button"
-import ZoomOutButton from "./panel-buttons/zoom-out-button"
+import { mergeLiveNodeUi } from "./live-node-ui"
+import { NativeFlowCanvas } from "./native-flow-canvas"
+import { FlowNavigationPanel } from "./qol/navigation-panel"
+import {
+  CollapsedSections,
+  FlowQolPresentationContext,
+  QolButtonEdge,
+  QolNodeViewer,
+} from "./qol/presentation"
+import { buildCollapsedSectionView } from "./qol/section-view"
 import { duplicateFlowNode } from "./toolbar/duplicate-node-data"
 import "./react-flow-wrapper.css"
 import { createId } from "@chatbotx.io/utils"
@@ -58,7 +74,6 @@ import {
   replaceSourceHandleEdge,
   toRouteRemovals,
 } from "./edge-routing"
-import ButtonEdge from "./edges/button-edge"
 import { findNodeAtPoint } from "./node-hit-test"
 import { hasMeaningfulNodeChange } from "./react-flow-node-change"
 import { useFlowHistoryStoreApi } from "./stores/flow-history-store-provider"
@@ -74,20 +89,20 @@ function getClientPosition(event: MouseEvent | TouchEvent) {
 }
 
 const viewerNodeTypes = {
-  [nodeTypeSchema.enum.sendMessage]: NodeViewer,
-  [nodeTypeSchema.enum.sendMail]: NodeViewer,
-  [nodeTypeSchema.enum.landingPage]: NodeViewer,
-  [nodeTypeSchema.enum.performAction]: NodeViewer,
-  [nodeTypeSchema.enum.addNotes]: NodeViewer,
-  [nodeTypeSchema.enum.wait]: NodeViewer,
-  [nodeTypeSchema.enum.followUp]: NodeViewer,
-  [nodeTypeSchema.enum.startFlow]: NodeViewer,
-  [nodeTypeSchema.enum.splitTraffic]: NodeViewer,
-  [nodeTypeSchema.enum.condition]: NodeViewer,
+  [nodeTypeSchema.enum.sendMessage]: QolNodeViewer,
+  [nodeTypeSchema.enum.sendMail]: QolNodeViewer,
+  [nodeTypeSchema.enum.landingPage]: QolNodeViewer,
+  [nodeTypeSchema.enum.performAction]: QolNodeViewer,
+  [nodeTypeSchema.enum.addNotes]: QolNodeViewer,
+  [nodeTypeSchema.enum.wait]: QolNodeViewer,
+  [nodeTypeSchema.enum.followUp]: QolNodeViewer,
+  [nodeTypeSchema.enum.startFlow]: QolNodeViewer,
+  [nodeTypeSchema.enum.splitTraffic]: QolNodeViewer,
+  [nodeTypeSchema.enum.condition]: QolNodeViewer,
 }
 
 const edgeTypes = {
-  buttonedge: ButtonEdge,
+  buttonedge: QolButtonEdge,
 }
 
 type ReactFlowFrameProps = {
@@ -101,7 +116,16 @@ type ReactFlowFrameProps = {
   ) => void
 }
 
-export function ReactFlowWrapper({
+export function ReactFlowWrapper(
+  props: ReactFlowFrameProps | NativeSourceCanvasViewProps,
+) {
+  if ("sourceDocument" in props) {
+    return <NativeSourceCanvasView {...props} />
+  }
+  return <LegacyReactFlowController {...props} />
+}
+
+function LegacyReactFlowController({
   flowVersion,
   onAutosaveFlushChange,
   onAutosaveCancelChange,
@@ -133,44 +157,124 @@ export function ReactFlowWrapper({
       },
     })),
   )
+  const [collapsedSections, setCollapsedSections] = useState<string[]>([])
+  const [viewLoaded, setViewLoaded] = useState(false)
+  const storageKey = `flow-qol:${flowVersion.workspaceId}:${flowVersion.id}`
+  useEffect(() => {
+    try {
+      const parsed: unknown = JSON.parse(
+        localStorage.getItem(storageKey) ?? "[]",
+      )
+      if (Array.isArray(parsed)) {
+        const collapsed = parsed.filter(
+          (id): id is string => typeof id === "string",
+        )
+        setCollapsedSections(collapsed)
+        setNodes((current) => {
+          const isHiddenSelected = (node: FlowNode) =>
+            node.selected &&
+            collapsed.includes(getFlowNodeSection(node)?.id ?? "")
+          if (!current.some(isHiddenSelected)) {
+            return current
+          }
+          return current.map((node) =>
+            isHiddenSelected(node) ? { ...node, selected: false } : node,
+          )
+        })
+      }
+    } catch {
+      // Unavailable browser storage does not prevent editing the draft.
+    }
+    setViewLoaded(true)
+  }, [storageKey, setNodes])
+  useEffect(() => {
+    if (!viewLoaded) {
+      return
+    }
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(collapsedSections))
+    } catch {
+      /* Browser preference only. */
+    }
+  }, [collapsedSections, storageKey, viewLoaded])
+  const sectionView = useMemo(
+    () => buildCollapsedSectionView(nodes, edges, collapsedSections),
+    [nodes, edges, collapsedSections],
+  )
   const lastSavedSerializedRef = useRef(
     serializeFlowContent(
       flowVersion.nodes as unknown as FlowNode[],
       flowVersion.edges as unknown as Edge[],
     ),
   )
+  const lastPersistedSerializedRef = useRef(lastSavedSerializedRef.current)
 
-  const { execute: savingDraft, executeAsync: savingDraftAsync } =
-    useOptimisticAction(
-      updateDraftFlowVersionAction.bind(
-        null,
-        flowVersion.workspaceId,
-        flowVersion.id,
-      ),
-      {
-        currentState: { flowVersion },
-        updateFn: (state, updatedData) => ({
-          flowVersion: {
-            ...state.flowVersion,
-            nodes: JSON.parse(JSON.stringify(updatedData.nodes)),
-            edges: JSON.parse(JSON.stringify(updatedData.edges)),
-          },
-        }),
-      },
-    )
+  const { executeAsync: savingDraftAsync } = useOptimisticAction(
+    updateDraftFlowVersionAction.bind(
+      null,
+      flowVersion.workspaceId,
+      flowVersion.id,
+    ),
+    {
+      currentState: { flowVersion },
+      updateFn: (state, updatedData) => ({
+        flowVersion: {
+          ...state.flowVersion,
+          nodes: JSON.parse(JSON.stringify(updatedData.nodes)),
+          edges: JSON.parse(JSON.stringify(updatedData.edges)),
+        },
+      }),
+    },
+  )
+
+  const pendingSavesRef = useRef(new Set<Promise<unknown>>())
+  const [templateAcknowledgement] = useState(() =>
+    createReceiptEmailTemplateAcknowledgement(flowVersion.nodes),
+  )
+  const t = useTranslations()
+  const saveDraft = useCallback(
+    (input: UpdateDraftFlowVersionSchema) => {
+      const content = JSON.parse(
+        serializeFlowContent(input.nodes, input.edges),
+      ) as Pick<UpdateDraftFlowVersionSchema, "nodes" | "edges">
+      const payload = {
+        ...input,
+        ...content,
+        expectedTemplateBase: templateAcknowledgement.getBase(),
+      }
+      const task = savingDraftAsync(payload)
+      pendingSavesRef.current.add(task)
+      task.then(
+        (result) => {
+          if (result?.data?.ok) {
+            lastPersistedSerializedRef.current = serializeFlowContent(
+              payload.nodes,
+              payload.edges,
+            )
+            templateAcknowledgement.acknowledge(payload.nodes)
+          } else {
+            toast.error(result?.serverError || t("supacrmTemplate.error"))
+          }
+          pendingSavesRef.current.delete(task)
+        },
+        () => pendingSavesRef.current.delete(task),
+      )
+      return task
+    },
+    [savingDraftAsync, templateAcknowledgement, t],
+  )
 
   const handleChanges = useDebouncedCallback(
     (changedNodes: FlowNode[], changedEdges: Edge[]) => {
-      savingDraft({
+      saveDraft({
         nodes: changedNodes,
         edges: changedEdges as unknown as UpdateDraftFlowVersionSchema["edges"],
-      })
+      }).catch(() => toast.error(t("supacrmTemplate.error")))
     },
     1500,
     4000,
   )
 
-  const t = useTranslations()
   const [isFlowMutating, setIsFlowMutating] = useState(false)
   const isMutatingRef = useRef(false)
   const snapshotSessionRef = useRef(false)
@@ -185,8 +289,14 @@ export function ReactFlowWrapper({
   // StoreUpdater syncs those props into its internal store WITHOUT firing
   // onNodesChange/onEdgesChange, so restoring never re-enters the snapshot path.
   useEffect(() => {
-    const restoreNodes = (restoredNodes: Node[]) =>
-      setNodes(restoredNodes as unknown as FlowNode[])
+    const restoreNodes = (restoredNodes: Node[]) => {
+      const live = new Map(getNodes().map((node) => [node.id, node]))
+      setNodes(
+        restoredNodes.map((node) =>
+          mergeLiveNodeUi(node, live.get(node.id)),
+        ) as FlowNode[],
+      )
+    }
 
     const restoreEdges = (restoredEdges: Edge[]) =>
       setEdges(
@@ -202,7 +312,7 @@ export function ReactFlowWrapper({
       .setRestoreHandlers({ setNodes: restoreNodes, setEdges: restoreEdges })
 
     return () => historyStore.getState().setRestoreHandlers(null)
-  }, [historyStore, setNodes, setEdges])
+  }, [historyStore, setNodes, setEdges, getNodes])
 
   const releaseSnapshotSession = useDebouncedCallback(() => {
     snapshotSessionRef.current = false
@@ -229,9 +339,18 @@ export function ReactFlowWrapper({
       if (hasMeaningfulNodeChange(changes)) {
         takeCoalescedSnapshot()
       }
-      onNodesChange(changes)
+      onNodesChange(
+        changes.filter(
+          (change) =>
+            !(
+              "id" in change &&
+              sectionView.hiddenNodeIds.has(change.id) &&
+              (change.type === "select" || change.type === "position")
+            ),
+        ),
+      )
     },
-    [onNodesChange, takeCoalescedSnapshot],
+    [onNodesChange, takeCoalescedSnapshot, sectionView.hiddenNodeIds],
   )
 
   const handleEdgesChange = useCallback(
@@ -266,14 +385,14 @@ export function ReactFlowWrapper({
         // freely) and `edges` as the zod edge schema, so only `edges` needs a cast.
         // The resolved result is cast to the orchestrator's narrow `DuplicateSaveResult`.
         saveDraft: async (input) =>
-          (await savingDraftAsync({
+          (await saveDraft({
             nodes: input.nodes,
             edges:
               input.edges as unknown as UpdateDraftFlowVersionSchema["edges"],
           })) as DuplicateSaveResult,
         onError: () => toast.error(t("messages.duplicateNodeError")),
       }),
-    [getNodes, getEdges, addNodes, handleChanges, savingDraftAsync, t],
+    [getNodes, getEdges, addNodes, handleChanges, saveDraft, t],
   )
 
   const deleteNode = useMemo(
@@ -286,14 +405,14 @@ export function ReactFlowWrapper({
         getNodes: () => getNodes() as unknown as FlowNode[],
         getEdges,
         saveDraft: async (input) =>
-          (await savingDraftAsync({
+          (await saveDraft({
             nodes: input.nodes,
             edges:
               input.edges as unknown as UpdateDraftFlowVersionSchema["edges"],
           })) as DeleteSaveResult,
         onError: () => toast.error(t("messages.deleteNodeError")),
       }),
-    [getNodes, getEdges, deleteElements, handleChanges, savingDraftAsync, t],
+    [getNodes, getEdges, deleteElements, handleChanges, saveDraft, t],
   )
 
   const duplicateNodeWithHistory = useCallback(
@@ -322,6 +441,9 @@ export function ReactFlowWrapper({
   )
 
   useEffect(() => {
+    if (isFlowMutating || isMutatingRef.current) {
+      return
+    }
     const serialized = serializeFlowContent(nodes, edges as Edge[])
     if (serialized === lastSavedSerializedRef.current) {
       return
@@ -330,7 +452,7 @@ export function ReactFlowWrapper({
     lastSavedSerializedRef.current = serialized
     onDraftDirtiedChange(true)
     handleChanges(nodes, edges)
-  }, [handleChanges, nodes, edges, onDraftDirtiedChange])
+  }, [handleChanges, nodes, edges, onDraftDirtiedChange, isFlowMutating])
 
   const markSaved = useCallback(
     (savedNodes: Node[], savedEdges: Edge[]) => {
@@ -338,10 +460,77 @@ export function ReactFlowWrapper({
         savedNodes,
         savedEdges,
       )
-      onDraftDirtiedChange(false)
+      lastPersistedSerializedRef.current = lastSavedSerializedRef.current
+      templateAcknowledgement.acknowledge(savedNodes)
+      onDraftDirtiedChange(
+        serializeFlowContent(getNodes(), getEdges()) !==
+          lastPersistedSerializedRef.current,
+      )
     },
-    [onDraftDirtiedChange],
+    [onDraftDirtiedChange, templateAcknowledgement, getNodes, getEdges],
   )
+
+  const { register: registerTemplateMutation, registerAcknowledgedBase } =
+    useReceiptEmailTemplateDraft()
+  useEffect(() => {
+    registerAcknowledgedBase(templateAcknowledgement.getBase)
+    return () => registerAcknowledgedBase(null)
+  }, [registerAcknowledgedBase, templateAcknowledgement])
+  const runTemplateMutation = useMemo(
+    () =>
+      createReceiptEmailTemplateDraftMutation({
+        isMutatingRef,
+        setMutating: setIsFlowMutating,
+        cancelAutosave: () => {
+          handleChanges.cancel()
+          // A cancelled scheduled save must resume after a refused/preview-only operation.
+          lastSavedSerializedRef.current = lastPersistedSerializedRef.current
+        },
+        waitForSaves: async () => {
+          const results = await Promise.all([...pendingSavesRef.current])
+          if (
+            results.some(
+              (result) =>
+                !(result as { data?: { ok?: boolean } } | undefined)?.data?.ok,
+            )
+          ) {
+            throw new Error("draftSaveFailed")
+          }
+        },
+        getGraph: () =>
+          JSON.parse(serializeFlowContent(getNodes(), getEdges())),
+        mutate: (input) =>
+          client.flowsAPI.privateChangeReceiptEmailTemplate({
+            ...input,
+            flowId: flowVersion.flowId,
+            workspaceId: flowVersion.workspaceId,
+          }),
+        apply: (node) => {
+          takeSnapshot()
+          const next = (getNodes() as FlowNode[]).map((current) =>
+            current.id === node.id
+              ? mergeLiveNodeUi<FlowNode>(node, current)
+              : current,
+          )
+          setNodes(next)
+          markSaved(next, getEdges())
+        },
+      }),
+    [
+      handleChanges,
+      getNodes,
+      getEdges,
+      flowVersion.flowId,
+      flowVersion.workspaceId,
+      takeSnapshot,
+      setNodes,
+      markSaved,
+    ],
+  )
+  useEffect(() => {
+    registerTemplateMutation(runTemplateMutation)
+    return () => registerTemplateMutation(null)
+  }, [registerTemplateMutation, runTemplateMutation])
 
   useEffect(() => {
     onAutosaveFlushChange(handleChanges.flush)
@@ -369,9 +558,14 @@ export function ReactFlowWrapper({
     [releaseSnapshotSession],
   )
 
-  const handleNodeClick = useCallback(() => {
-    setOpenNodeDetailSheet(true)
-  }, [setOpenNodeDetailSheet])
+  const handleNodeClick = useCallback(
+    (_event: ReactMouseEvent, node: Node) => {
+      if (!sectionView.hiddenNodeIds.has(node.id)) {
+        setOpenNodeDetailSheet(true)
+      }
+    },
+    [setOpenNodeDetailSheet, sectionView.hiddenNodeIds],
+  )
 
   const handlePaneClick = useCallback(() => {
     setOpenNodeDetailSheet(false)
@@ -402,7 +596,11 @@ export function ReactFlowWrapper({
 
   const onConnect = useCallback(
     (params: Connection) => {
-      if (params.source === params.target) {
+      if (
+        params.source === params.target ||
+        sectionView.hiddenNodeIds.has(params.source) ||
+        sectionView.hiddenNodeIds.has(params.target)
+      ) {
         return
       }
 
@@ -425,7 +623,12 @@ export function ReactFlowWrapper({
         ])
       }
     },
-    [applyButtonRoutes, setEdges, takeCoalescedSnapshot],
+    [
+      applyButtonRoutes,
+      setEdges,
+      takeCoalescedSnapshot,
+      sectionView.hiddenNodeIds,
+    ],
   )
 
   const onConnectEnd = useCallback(
@@ -437,6 +640,7 @@ export function ReactFlowWrapper({
       const fromNode = connectionState.fromNode
       if (
         !(fromHandle?.id && fromNode) ||
+        sectionView.hiddenNodeIds.has(fromNode.id) ||
         fromHandle.type !== "source" ||
         connectionState.toHandle ||
         connectionState.toNode
@@ -453,8 +657,24 @@ export function ReactFlowWrapper({
         : { x: 300, y: 300 }
 
       const droppedOnNode = clientPosition
-        ? findNodeAtPoint(getIntersectingNodes, position, fromNode.id)
+        ? findNodeAtPoint(
+            getIntersectingNodes,
+            position,
+            fromNode.id,
+            sectionView.hiddenNodeIds,
+          )
         : undefined
+
+      // A collapsed member's old rectangle is neither a visible destination
+      // nor an empty-pane request to create a new executable node/route.
+      if (
+        !droppedOnNode &&
+        clientPosition &&
+        sectionView.hiddenNodeIds.size > 0 &&
+        findNodeAtPoint(getIntersectingNodes, position, fromNode.id)
+      ) {
+        return
+      }
 
       if (droppedOnNode) {
         takeCoalescedSnapshot()
@@ -524,6 +744,7 @@ export function ReactFlowWrapper({
       applyButtonRoutes,
       screenToFlowPosition,
       takeCoalescedSnapshot,
+      sectionView.hiddenNodeIds,
       t,
     ],
   )
@@ -558,64 +779,127 @@ export function ReactFlowWrapper({
     [applyButtonRoutes, takeCoalescedSnapshot],
   )
 
+  const focusNode = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((entry) => entry.id === nodeId)
+      if (!node) {
+        return
+      }
+      const sectionId = getFlowNodeSection(node)?.id
+      if (sectionId) {
+        setCollapsedSections((current) =>
+          current.filter((id) => id !== sectionId),
+        )
+      }
+      setNodes((current) =>
+        current.map((entry) => ({ ...entry, selected: entry.id === nodeId })),
+      )
+      setOpenNodeDetailSheet(true)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          reactFlow.fitView({
+            nodes: [{ id: nodeId }],
+            padding: 0.6,
+            maxZoom: 1,
+            duration: 300,
+          })
+        }),
+      )
+    },
+    [nodes, reactFlow, setNodes, setOpenNodeDetailSheet],
+  )
+
+  const toggleSection = useCallback(
+    (sectionId: string) => {
+      setCollapsedSections((current) =>
+        current.includes(sectionId)
+          ? current.filter((id) => id !== sectionId)
+          : [...current, sectionId],
+      )
+      setNodes((current) =>
+        current.map((node) =>
+          getFlowNodeSection(node)?.id === sectionId
+            ? { ...node, selected: false }
+            : node,
+        ),
+      )
+      setOpenNodeDetailSheet(false)
+    },
+    [setNodes, setOpenNodeDetailSheet],
+  )
+
+  const assignSection = useCallback(
+    (section: FlowSection) => {
+      takeSnapshot()
+      setNodes((current) => assignFlowSection(current, section))
+    },
+    [setNodes, takeSnapshot],
+  )
+
+  const dissolveSection = useCallback(
+    (sectionId: string) => {
+      takeSnapshot()
+      setNodes((current) => removeFlowSection(current, sectionId))
+      setCollapsedSections((current) =>
+        current.filter((id) => id !== sectionId),
+      )
+    },
+    [setNodes, takeSnapshot],
+  )
+
   return (
     <FlowMutationProvider value={flowMutationValue}>
-      <ReactFlow
-        defaultEdgeOptions={{
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-          },
-          style: {
-            strokeWidth: 2,
-          },
-        }}
-        deleteKeyCode={isFlowMutating ? null : undefined}
-        edges={edges}
-        edgeTypes={edgeTypes}
-        elementsSelectable={!isFlowMutating}
-        maxZoom={10}
-        minZoom={0.1}
-        nodes={nodes}
-        nodesConnectable={!isFlowMutating}
-        nodesDraggable={!isFlowMutating}
-        nodeTypes={viewerNodeTypes}
-        onConnect={onConnect}
-        onConnectEnd={onConnectEnd}
-        onEdgeMouseEnter={onEdgeMouseEnter}
-        onEdgeMouseLeave={onEdgeMouseLeave}
-        onEdgesChange={handleEdgesChange}
-        onEdgesDelete={onEdgesDelete}
-        onNodeClick={handleNodeClick}
-        onNodeDragStart={handleNodeDragStart}
-        onNodeDragStop={handleNodeDragStop}
-        onNodeMouseEnter={onNodeMouseEnter}
-        onNodeMouseLeave={onNodeMouseLeave}
-        onNodesChange={handleNodesChange}
-        onPaneClick={handlePaneClick}
-        proOptions={{ hideAttribution: true }}
-      >
-        {isFlowMutating && (
-          <div
-            className="absolute inset-0 z-50 cursor-wait bg-white/40 dark:bg-black/40"
-            data-testid="flow-mutation-overlay"
-          />
-        )}
-        <Background />
-        <Panel className="w-[254px]" position="bottom-center">
-          <Controls
-            className="overflow-hidden rounded-md shadow-none!"
-            orientation="horizontal"
-            showFitView={false}
-            showInteractive={false}
-            showZoom={false}
-          >
-            <FocusButton />
-            <ZoomInButton />
-            <ZoomOutButton />
-            <AddNodeButton />
-          </Controls>
-        </Panel>
-      </ReactFlow>
+      <FlowQolPresentationContext value={sectionView}>
+        <NativeFlowCanvas
+          defaultEdgeOptions={{
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+            },
+            style: {
+              strokeWidth: 2,
+            },
+          }}
+          deleteKeyCode={isFlowMutating ? null : undefined}
+          edges={edges}
+          edgeTypes={edgeTypes}
+          elementsSelectable={!isFlowMutating}
+          isMutating={isFlowMutating}
+          maxZoom={10}
+          minZoom={0.1}
+          nodes={nodes}
+          nodesConnectable={!isFlowMutating}
+          nodesDraggable={!isFlowMutating}
+          nodeTypes={viewerNodeTypes}
+          onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
+          onEdgeMouseEnter={onEdgeMouseEnter}
+          onEdgeMouseLeave={onEdgeMouseLeave}
+          onEdgesChange={handleEdgesChange}
+          onEdgesDelete={onEdgesDelete}
+          onNodeClick={handleNodeClick}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
+          onNodeMouseEnter={onNodeMouseEnter}
+          onNodeMouseLeave={onNodeMouseLeave}
+          onNodesChange={handleNodesChange}
+          onPaneClick={handlePaneClick}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Panel position="top-left">
+            <FlowNavigationPanel
+              collapsed={collapsedSections}
+              disabled={isFlowMutating}
+              edges={edges}
+              nodes={nodes}
+              onAssignSection={assignSection}
+              onFocus={focusNode}
+              onRemoveSection={dissolveSection}
+              onToggleSection={toggleSection}
+            />
+          </Panel>
+          <CollapsedSections onExpand={toggleSection} view={sectionView} />
+        </NativeFlowCanvas>
+      </FlowQolPresentationContext>
     </FlowMutationProvider>
   )
 }

@@ -7,6 +7,7 @@ import { getSendMessageChannel } from "../nodes/send-message"
 import { type StepType, stepTypes } from "../steps/step-action"
 import { flowValidationCodes } from "../validation-codes"
 import { resolveStepValidator } from "./channel-validator"
+import { countMessageCharacters } from "./characters"
 import {
   CHANNEL_FLOW_POLICIES,
   CHANNEL_POLICY_VERSION,
@@ -57,6 +58,34 @@ export const refineStepsByChannel = (
     const channel = getSendMessageChannel(node)
 
     const policy = CHANNEL_FLOW_POLICIES[channel]
+    // Проверяем все кнопки, включая быстрые ответы и кнопки карточек.
+    const checkLabels = (value: unknown, path: PropertyKey[]): void => {
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          checkLabels(item, [...path, index])
+        })
+        return
+      }
+      if (!value || typeof value !== "object") {
+        return
+      }
+      const record = value as Record<string, unknown>
+      if (
+        "buttonType" in record &&
+        typeof record.label === "string" &&
+        countMessageCharacters(record.label) > policy.limits.buttonLabel
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: flowValidationCodes.constraintExceeded,
+          path: [...path, "label"],
+        })
+      }
+      for (const [key, child] of Object.entries(record)) {
+        checkLabels(child, [...path, key])
+      }
+    }
+    checkLabels(node.data.details, [nodeIndex, "data", "details"])
     const quickReplyCount = node.data.details.quickReplies.length
     let quickReplyOverflowReported = false
 

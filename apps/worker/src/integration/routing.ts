@@ -65,3 +65,17 @@ export async function resolveIncomingTextRouting(props: {
 
   return { type: "automatedResponse", conversation }
 }
+
+const API_START_COMMAND = /^\/start(?:\s|$)/
+
+/** Entry selection never turns every message into a fresh flow invocation. */
+export const selectApiEntryFlow = (input: {
+  integrationType: string
+  isNewContact: boolean
+  text?: string | null
+  entryFlowId?: string
+}): string | undefined =>
+  input.integrationType === "api" &&
+  (input.isNewContact || API_START_COMMAND.test(input.text ?? ""))
+    ? input.entryFlowId
+    : undefined

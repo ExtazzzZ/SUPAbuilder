@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto"
 import { automatedResponseService } from "@chatbotx.io/automated-response"
-import { broadcastService, contactActivityService } from "@chatbotx.io/business"
+import {
+  broadcastService,
+  contactActivityService,
+  fulfillmentStatusService,
+  supacrmSourceBindingService,
+} from "@chatbotx.io/business"
 import { and, db, eq } from "@chatbotx.io/database/client"
 import { createMessageRepository } from "@chatbotx.io/database/repositories"
 import { contactsOnBroadcastsModel } from "@chatbotx.io/database/schema"
@@ -15,6 +20,7 @@ import {
   type BaseStepSchema,
   BROADCAST_PAYLOAD_TYPE,
   type ButtonStepProps,
+  type ChooseChannelStepSchema,
   decodeButtonPayload,
   type EdgeSchema,
   type FlowActionTargetType,
@@ -25,6 +31,7 @@ import {
   isQuickReplyCarrierStep,
   type MetadataPayload,
   resolveFlowActionTarget,
+  type SendTextStepSchema,
   type StepType,
   stepTypes,
 } from "@chatbotx.io/flow-config"
@@ -53,6 +60,7 @@ import {
   isDurableFlowExecutionKey,
   mintRandomFlowExecutionKey,
 } from "../flow-execution-key"
+import { executeTracedFlowStep } from "./execution-trace"
 import {
   type ExecuteMultipleStepsProps,
   MESSAGE_PRODUCING_STEP_TYPES,
@@ -138,6 +146,7 @@ type ExecuteStepsAndQuickRepliesProps = {
   details: {
     beforeStep?: BaseStepSchema | null
     steps?: BaseStepSchema[] | null
+    presentation?: { updateMode: "send_new" | "edit_previous" }
     quickReplies?: ButtonStepProps[] | null
   }
   startFromStepId?: string
@@ -149,6 +158,10 @@ type ExecuteStepsAndQuickRepliesProps = {
     variables: Variables
   }
   trackingContext?: BotResponseTrackingContext
+  crmNavigation?: {
+    sourceEventId: string
+    updateMode?: "send_new" | "edit_previous"
+  }
   metadata?: MetadataPayload
   isBulkBroadcast?: boolean
   sendFrom?: "inbox"
@@ -258,7 +271,8 @@ export const runFlowNode = async (
     }
   }
 
-  const { trackingContext, metadata, sendFrom, commentAnchor } = props
+  const { trackingContext, metadata, sendFrom, commentAnchor, crmNavigation } =
+    props
   const flowExecutionKey = resolveFlowExecutionKey(options, {
     conversationId: getFlowJobEntityId(props.conversationId),
     contactInboxId: getFlowJobEntityId(props.contactInboxId),
@@ -338,6 +352,7 @@ export const runFlowNode = async (
       sendFrom,
       startedByContactMessage: props.startedByContactMessage,
       nodeVisits: props.nodeVisits,
+      crmNavigation,
       commentAnchor,
       appointmentId: props.appointmentId,
       sentByUserId: props.sentByUserId,
@@ -516,12 +531,48 @@ export async function runStepsAndQuickReplies(
     }
 
     const currentStep = details.steps[startIdx]
+    // Только доказанный текстовый конец API-цепочки завершает pending CRM.
+    // Промежуточные части, действия и любые исходящие ветки оставляем прежними.
+    const isPlainTerminal =
+      props.contactInbox.channel === "api" &&
+      targetType === "node" &&
+      (!details.beforeStep ||
+        (details.beforeStep.stepType === stepTypes.enum.chooseChannel &&
+          ["api", "omnichannel"].includes(
+            (details.beforeStep as ChooseChannelStepSchema).channel,
+          ))) &&
+      quickReplies.length === 0 &&
+      startIdx === details.steps.length - 1 &&
+      details.steps.every(
+        (step) =>
+          step.stepType === stepTypes.enum.sendText &&
+          !(step as SendTextStepSchema).buttons?.length,
+      ) &&
+      !(flowVersion.edges as EdgeSchema[]).some(
+        (edge) =>
+          edge.source === props.targetNodeId ||
+          edge.sourceHandle === targetId ||
+          details.steps?.some((step) =>
+            step.states?.some((state) => state.id === edge.sourceHandle),
+          ),
+      )
+    const updateMode =
+      details.presentation?.updateMode ??
+      props.crmNavigation?.updateMode ??
+      (isPlainTerminal ? "send_new" : undefined)
     const result = await executeMultipleSteps({
       ...props,
       nodeVisits,
       commentAnchor: remainingAnchor,
       quickReplies:
         quickReplyCarrier?.id === currentStep.id ? quickReplies : undefined,
+      crmNavigation:
+        props.crmNavigation && updateMode
+          ? {
+              ...props.crmNavigation,
+              updateMode,
+            }
+          : props.crmNavigation,
       steps: [currentStep],
     })
     remainingAnchor = result?.commentAnchor
@@ -586,6 +637,7 @@ export async function runStepsAndQuickReplies(
           triggerMessageId: props.triggerMessageId,
           triggerMessageCreatedAt: props.triggerMessageCreatedAt,
           startedByContactMessage: props.startedByContactMessage,
+          crmNavigation: props.crmNavigation,
           commentAnchor: remainingAnchor,
           // The continuation keeps the parent's key: a retried parent enqueues a
           // second continuation with another job id, and the conversion step
@@ -664,6 +716,7 @@ export async function runStepsAndQuickReplies(
         triggerMessageId: props.triggerMessageId,
         triggerMessageCreatedAt: props.triggerMessageCreatedAt,
         startedByContactMessage: props.startedByContactMessage,
+        crmNavigation: props.crmNavigation,
         commentAnchor: remainingAnchor,
         origin: webhookChannelOrigin(),
       },
@@ -694,6 +747,17 @@ async function* executeMultipleStepsGenerator(
   props: ExecuteMultipleStepsProps,
 ) {
   const { steps, commentAnchor, ...rest } = props
+  // Последний gate для продолжений с закешированным FlowVersion/steps.
+  if (props.flowVersion.workspaceId !== props.conversation.workspaceId) {
+    throw new SdkException("FlowVersion unavailable")
+  }
+  const binding = await supacrmSourceBindingService.getDocumentBinding({
+    workspaceId: props.conversation.workspaceId,
+    flowId: props.flowVersion.flowId,
+  })
+  if (binding.kind !== "legacy") {
+    throw new SdkException("FlowVersion unavailable")
+  }
   // A `private` anchor is claimed by the first message-producing step in this
   // run (however many jobs/nodes it takes to reach one) — see
   // MESSAGE_PRODUCING_STEP_TYPES — and then continues as `spent`. A `public`
@@ -716,11 +780,13 @@ async function* executeMultipleStepsGenerator(
     )
     const stepAnchor = isMessageProducingStep ? anchorAvailable : undefined
 
-    const rawResult = await flowStepHandlers[step.stepType as StepType]?.({
-      ...rest,
-      commentAnchor: stepAnchor,
-      step: stepWithNodeId,
-    })
+    const rawResult = await executeTracedFlowStep(props, step, async () =>
+      flowStepHandlers[step.stepType as StepType]?.({
+        ...rest,
+        commentAnchor: stepAnchor,
+        step: stepWithNodeId,
+      }),
+    )
 
     // void handlers are treated as implicit success (fire-and-forget, no routing)
     const result = rawResult ?? { status: "success" as const, result: null }
@@ -794,6 +860,7 @@ async function* executeMultipleStepsGenerator(
               triggerMessageId: props.triggerMessageId,
               triggerMessageCreatedAt: props.triggerMessageCreatedAt,
               startedByContactMessage: props.startedByContactMessage,
+              crmNavigation: props.crmNavigation,
               commentAnchor: anchorAvailable,
               flowExecutionKey: isDurableFlowExecutionKey(
                 props.flowExecutionKey,
@@ -1005,6 +1072,12 @@ async function runFlowAction(
     `${handler.name}: decoded action payload`,
   )
 
+  // Rich-button fallback тоже может выполнить effect до разрешения версии.
+  const owningBinding = await supacrmSourceBindingService.getDocumentBinding({
+    workspaceId: conversation.workspaceId, flowId: parsedAction.flowId,
+  })
+  if (owningBinding.kind !== "legacy") return
+
   const { buttonId } = parsedAction
   if (!buttonId) {
     // A bare flow-ID payload (Messenger ad) can point at a since-deleted or
@@ -1033,6 +1106,7 @@ async function runFlowAction(
         flowId: parsedAction.flowId,
         flowVersionId: parsedAction.flowVersionId,
         nodeId: parsedAction.nodeId,
+        crmNavigation: data.crmNavigation,
       },
       { flowExecutionKey },
     )
@@ -1064,13 +1138,28 @@ async function runFlowAction(
   // does: a thrown job would only retry and dead-letter, and the tap is already
   // in the past. Anything that is not a resolution failure still propagates so
   // the job can retry.
+  const continuation = data.crmFulfillmentContinuation
+  const pinned = continuation
+    ? await fulfillmentStatusService.continuation({
+        ...continuation,
+        workspaceId: conversation.workspaceId,
+        inboxId: contactInbox.inboxId,
+        contactId: conversation.contactId,
+        conversationId: conversation.id,
+        sourceId: contactInbox.sourceId,
+        sourceEventId: data.crmNavigation?.sourceEventId,
+        action: data.action,
+      })
+    : null
   let flowVersion: FlowVersionModel
   try {
-    const resolved = await detectFlowVersion({
-      flowId: parsedAction.flowId,
-      flowVersionId: parsedAction.flowVersionId,
-      workspaceId: conversation.workspaceId,
-    })
+    const resolved = pinned
+      ? { flowVersion: pinned }
+      : await detectFlowVersion({
+          flowId: parsedAction.flowId,
+          flowVersionId: parsedAction.flowVersionId,
+          workspaceId: conversation.workspaceId,
+        })
     flowVersion = resolved.flowVersion
   } catch (error) {
     if (error instanceof SdkException) {
@@ -1152,7 +1241,7 @@ async function runFlowAction(
       conversation,
       contactInbox,
       flowVersion,
-      useLatestFlowVersion: true,
+      useLatestFlowVersion: !pinned,
       details: target.details,
       targetType: target.targetType,
       targetId: target.details.id,
@@ -1164,6 +1253,7 @@ async function runFlowAction(
       startedByContactMessage:
         data.webhookType !== IntegrationJobAction.messageStatus,
       flowExecutionKey,
+      crmNavigation: data.crmNavigation,
     })
     if (data.messageId) {
       emit("analytics:dashboard", {

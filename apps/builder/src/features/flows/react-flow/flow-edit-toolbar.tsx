@@ -58,6 +58,7 @@ import {
   type PublishFlowSchema,
   updateFlowVersionSchema,
 } from "../schema/action"
+import { useReceiptEmailTemplateDraft } from "../supacrm-form/template-draft-context"
 import AnalyticsFlow from "./components/analytics-flow"
 import { FlowVersionsDialog } from "./components/flow-versions-dialog"
 import { MessengerAdPayloadDialog } from "./components/messenger-ad-payload-dialog"
@@ -164,18 +165,22 @@ export function FlowEditToolbar({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [undo, redo])
 
+  const { getAcknowledgedBase } = useReceiptEmailTemplateDraft()
   const { execute: executePublish, isPending: isPendingPublish } = useAction(
     publishFlowAction.bind(null, workspaceId, flow.id),
     {
-      onSuccess: () => {
+      onSuccess: ({ input }) => {
         toast.success(t("messages.publishVersionSuccess"))
         // Publishing makes the canvas the published version. Clear the dirty
         // baseline and refresh server state so gates that depend on
         // "published & clean" (the Messenger Ads JSON action, the revert
         // button) update immediately instead of staying stale until reload.
-        markSaved?.(getNodes(), getEdges())
+        markSaved?.(input.nodes as Node[], input.edges as Edge[])
         invalidateFlows()
         router.refresh()
+      },
+      onError: ({ error }) => {
+        toast.error(error.serverError || t("supacrmTemplate.error"))
       },
     },
   )
@@ -216,6 +221,7 @@ export function FlowEditToolbar({
       executePublish({
         nodes: nodes as unknown as PublishFlowSchema["nodes"],
         edges: edges as unknown as PublishFlowSchema["edges"],
+        expectedTemplateBase: getAcknowledgedBase(),
       })
     } else {
       toast.error(t(resolveFlowValidationMessageKey(validationResult.error)), {

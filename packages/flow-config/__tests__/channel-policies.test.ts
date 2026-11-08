@@ -15,7 +15,7 @@ import { sendTextStepDefaultFn } from "../src/steps/send-text"
 import { stepTypes } from "../src/steps/step-action"
 
 const MEDIA_SUPPORT_BY_CHANNEL = {
-  api: ["noButtons", "noButtons", "noButtons", "noButtons", "full"],
+  api: ["full", "noButtons", "noButtons", "noButtons", "full"],
   instagram: ["noButtons", "noButtons", "noButtons", "noButtons", "full"],
   messenger: ["full", "full", "noButtons", "noButtons", "full"],
   omnichannel: ["full", "full", "full", "full", "full"],

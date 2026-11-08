@@ -75,6 +75,22 @@ export type ChannelSendFlowStepProps<IAuth extends AuthValue> = {
   ctx: Context<IAuth>
   data: {
     contact: OutgoingContact
+    /** Stable logical send identity, preserved across queue and callback retries. */
+    operationId?: string
+    crmFulfillmentOrigin?: {
+      workspaceId: string
+      inboxId: string
+      contactId: string
+      conversationId: string
+      flowId: string
+      flowVersionId: string
+      nodeId: string
+      stepId: string
+    }
+    crmNavigation?: {
+      sourceEventId: string
+      updateMode?: "send_new" | "edit_previous"
+    }
     flowId: string
     flowVersionId?: string
     step: SendFlowStepData
@@ -133,6 +149,21 @@ export type MessageHandlers<
       ctx: Context<IAuth>
       data: {
         contact: OutgoingContact
+        operationId?: string
+        crmFulfillmentOrigin?: {
+          workspaceId: string
+          inboxId: string
+          contactId: string
+          conversationId: string
+          flowId: string
+          flowVersionId: string
+          nodeId: string
+          stepId: string
+        }
+        crmNavigation?: {
+          sourceEventId: string
+          updateMode?: "send_new" | "edit_previous"
+        }
         flowId: string
         flowVersionId?: string
         step: TStep

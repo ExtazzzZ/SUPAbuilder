@@ -8,7 +8,8 @@
     "./server": "./src/server.ts",
     "./client": "./src/client.ts",
     "./provisioning": "./src/provisioning.ts",
-    "./tenant": "./src/tenant-context.ts"
+    "./tenant": "./src/tenant-context.ts",
+    "./supalogin": "./src/supalogin-config.ts"
   },
   "dependencies": {
     "@chatbotx.io/business": "workspace:*",
@@ -17,6 +18,7 @@
     "@chatbotx.io/mail": "workspace:*",
     "@chatbotx.io/sdk": "workspace:*",
     "@chatbotx.io/utils": "workspace:*",
+    "@openauthjs/openauth": "0.4.3",
     "@t3-oss/env-core": "^0.13.11",
     "better-auth": "^1.6.22",
     "zod": "^4.3.6"

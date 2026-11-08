@@ -132,7 +132,11 @@ const connectApi: NonNullable<ConnectionAdapter["connect"]> = async (input) => {
   })
   return {
     connection: result.connection,
-    secret: { kind: "api_channel_token", token: result.token },
+    secret: {
+      kind: "api_channel_token",
+      token: result.token,
+      signingSecret: result.signingSecret,
+    },
   }
 }
 

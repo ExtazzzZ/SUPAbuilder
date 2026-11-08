@@ -363,6 +363,7 @@ chatbotx broadcasts restore-occurrence add <id>      # same flags; undo a skip (
 ```bash
 chatbotx flows list                                  # [--page --perPage --active --name --folderId --startType --integrationWhatsappId --sort]  active defaults to true
 chatbotx flows get <id>                              # Includes its versions
+chatbotx flows search list <id>                       # [--query] draft node identities, editor sections and connection handles
 chatbotx flows create --name <name>                  # [--folderId --spec --nodes --edges --publish]
                                                      # spec: flow-spec DSL (see `schemas flow-spec`); nodes/edges: raw
                                                      # graph (mutually exclusive with spec); publish: create the first
@@ -378,6 +379,14 @@ chatbotx flows import --fileId <fileId>              # [--folderId]  queue async
 ```
 
 ---
+
+Editor sections use optional `node.data.editorMetadata.section={id,title}` membership.
+Use `flows draft update` to assign or remove it without changing node actions or edges.
+A section id has one consistent title; collapse and focus stay local to the editor.
+
+### Shared Email settings revisions
+
+`flows receipt-email-templates` lists published Email settings sources and exact revisions; `flows receipt-email-template-usages` returns draft/published consumers separately. Use `flows receipt-email-template-change` with `action=preview`, then explicit `action=adopt`, the same source triplet, and `expectedNode` from `flows get`. Only the consumer draft changes; publish that flow separately. Ordinary `flows draft update` and `flows publish add` must echo `draftTemplateBase` from `flows get` as `expectedTemplateBase` whenever the stored or incoming graph contains a template binding; stale/omitted bases reject the write. Use the returned draft base, not published history. Optional `prompt` is the only local override. `action=detach` keeps the effective form, including when the source is unavailable. These commands use the existing automation permission scope.
 
 ### `sequences`
 

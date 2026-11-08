@@ -208,6 +208,7 @@ export const runFlowImport = async (row: ImportRow): Promise<void> => {
             botFieldManifestIds.has(warning.value))
         ),
     )
+    warnings.push(...(result.templateWarnings ?? []))
   } catch (error) {
     logger.error({ err: error }, `Flow import ${row.id} insert failed`)
     if (error instanceof FlowAuthoringException) {

@@ -9,10 +9,16 @@ import { z } from "zod"
 import { postSignedEnvelope } from "../../lib/delivery"
 import type { ApiAuthValue } from "../../schema"
 
-const messageStatusPayloadSchema = z.object({
-  messageSourceId: z.string().min(1),
-  status: z.string(),
-})
+const messageStatusPayloadSchema = z
+  .object({
+    messageId: z.string().min(1).optional(),
+    messageSourceId: z.string().min(1).optional(),
+    status: z.enum(["delivered", "failed", "read"]),
+  })
+  .refine(
+    (data) => Boolean(data.messageId || data.messageSourceId),
+    "A message ID is required",
+  )
 
 export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
   props,
@@ -27,10 +33,16 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
     return { messageIds: [], sentCount: 0 }
   }
 
+  const {
+    crmFulfillmentOrigin: _origin,
+    crmFulfillmentContinuation: _continuation,
+    ...safeAttributes
+  } = message.contentAttributes ?? {}
   const response = await postSignedEnvelope({
     callbackUrl: ctx.auth.callbackUrl,
     signingSecret: ctx.auth.signingSecret,
     envelope: {
+      operationId: message.id,
       event: "message_created",
       timestamp: new Date().toISOString(),
       contact: { id: contact.id, sourceId: contact.sourceId },
@@ -41,7 +53,7 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
         messageType: message.messageType,
         contentType: message.contentType,
         attachments: message.attachments,
-        contentAttributes: message.contentAttributes,
+        contentAttributes: safeAttributes,
         quickReplies,
       },
     },
@@ -61,23 +73,45 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
   async (props) => {
     const {
       ctx,
-      data: { contact, step, quickReplies },
+      data: {
+        contact,
+        step,
+        quickReplies,
+        operationId,
+        crmNavigation,
+        crmFulfillmentOrigin,
+      },
     } = props
 
-    const { text, contentAttributes } = mapFlowStepToEnvelope(step)
+    const mapped = mapFlowStepToEnvelope(step)
+    const { text } = mapped
+    const contentAttributes =
+      crmNavigation && contact.sourceId.startsWith("supacrm:")
+        ? {
+            ...mapped.contentAttributes,
+            crmNavigation,
+            ...(crmFulfillmentOrigin ? { crmFulfillmentOrigin } : {}),
+          }
+        : mapped.contentAttributes
 
     if (!ctx.auth.callbackUrl) {
       return { messageIds: [], sentCount: 0 }
+    }
+
+    if (!operationId) {
+      throw new Error("API flow send requires a stable operationId")
     }
 
     const response = await postSignedEnvelope({
       callbackUrl: ctx.auth.callbackUrl,
       signingSecret: ctx.auth.signingSecret,
       envelope: {
+        operationId,
         event: "message_created",
         timestamp: new Date().toISOString(),
         contact: { id: contact.id, sourceId: contact.sourceId },
         message: {
+          id: operationId,
           text,
           messageType: "outgoing",
           contentType: contentTypes.enum.text,
@@ -126,15 +160,26 @@ const mapFlowStepToEnvelope = (
 ): { text: string | null; contentAttributes?: Record<string, unknown> } => {
   switch (step.stepType) {
     case stepTypes.enum.sendText:
-      return { text: step.text }
+      return {
+        text: step.text,
+        ...(step.textFormat
+          ? { contentAttributes: { textFormat: step.textFormat } }
+          : {}),
+      }
     case stepTypes.enum.sendImage:
     case stepTypes.enum.sendGif:
     case stepTypes.enum.sendVideo:
     case stepTypes.enum.sendAudio:
     case stepTypes.enum.sendFile:
       return {
-        text: null,
+        text:
+          step.stepType === stepTypes.enum.sendImage
+            ? (step.caption ?? null)
+            : null,
         contentAttributes: {
+          ...(step.stepType === stepTypes.enum.sendImage && step.textFormat
+            ? { textFormat: step.textFormat }
+            : {}),
           attachments: [
             { url: step.url, fileType: fileTypeForStep(step.stepType) },
           ],
@@ -181,7 +226,7 @@ export const handleMessageStatus: NonNullable<
 
   return Promise.resolve({
     message: {
-      sourceId: validated.messageSourceId,
+      sourceId: (validated.messageId ?? validated.messageSourceId) as string,
       messageType: "outgoing",
       contentType: contentTypes.enum.text,
       contentAttributes: { deliveryStatus: validated.status },

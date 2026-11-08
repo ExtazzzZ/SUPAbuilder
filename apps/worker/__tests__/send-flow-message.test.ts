@@ -182,3 +182,19 @@ describe("sendFlowMessage", () => {
     expect(resolved).toBe(true)
   })
 })
+
+test("передаёт причину входящего события в очередь отправки", async () => {
+  vi.clearAllMocks()
+  await sendFlowMessage({
+    ...makeProps(),
+    crmNavigation: { sourceEventId: "event-42" },
+  })
+  expect(mocks.chatQueueAdd).toHaveBeenCalledWith(
+    "sendFlowMessage",
+    expect.objectContaining({
+      data: expect.objectContaining({
+        crmNavigation: { sourceEventId: "event-42" },
+      }),
+    }),
+  )
+})

@@ -327,6 +327,10 @@ export interface IMessageRepository {
   findRichResponseByButton(
     params: FindRichResponseByButtonParams,
   ): Promise<RichResponseContentAttributes | null>
+  findStatusCandidates(props: {
+    workspaceId: string
+    sourceId: string
+  }): Promise<MessageModel[]>
 
   findTriggerMessage(
     options: FindTriggerMessageOptions,

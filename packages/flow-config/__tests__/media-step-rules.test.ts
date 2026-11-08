@@ -52,7 +52,7 @@ describe("resolveMediaStepSupport", () => {
     ["tiktok", "sendImage", "noButtons"],
     ["tiktok", "sendVideo", "unsupported"],
     ["tiktok", "sendGif", "unsupported"],
-    ["api", "sendImage", "noButtons"],
+    ["api", "sendImage", "full"],
     ["webchat", "sendVideo", "full"],
     ["omnichannel", "sendVideo", "full"],
   ])("%s / %s → %s", (channel, stepType, expected) => {

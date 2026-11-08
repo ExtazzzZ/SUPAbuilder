@@ -67,3 +67,39 @@ describe("findNodeAtPoint", () => {
     expect(result?.id).toBe("second")
   })
 })
+
+describe("collapsed section connection drop", () => {
+  test("a hidden member rectangle cannot become a runtime connection target", () => {
+    const hidden = makeNode("hidden", 100)
+    const intersections = vi.fn().mockReturnValue([hidden])
+    expect(
+      findNodeAtPoint(
+        intersections,
+        { x: 100, y: 200 },
+        "source",
+        new Set(["hidden"]),
+      ),
+    ).toBeUndefined()
+  })
+  test("a visible drop target remains connectable even beneath an intersecting hidden member", () => {
+    const visible = makeNode("visible", 1)
+    const hidden = makeNode("hidden", 100)
+    const intersections = vi.fn().mockReturnValue([visible, hidden])
+    expect(
+      findNodeAtPoint(
+        intersections,
+        { x: 100, y: 200 },
+        "source",
+        new Set(["hidden"]),
+      )?.id,
+    ).toBe("visible")
+    expect(
+      findNodeAtPoint(
+        () => [visible],
+        { x: 100, y: 200 },
+        "source",
+        new Set(["hidden"]),
+      )?.id,
+    ).toBe("visible")
+  })
+})

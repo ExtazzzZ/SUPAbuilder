@@ -3,6 +3,7 @@ import { Input } from '@chatbotx.io/ui/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@chatbotx.io/ui/components/ui/popover';
 import { cn } from '@chatbotx.io/ui/lib/utils';
 import { add, format } from 'date-fns';
+import { useCalendarLocale } from './calendar-locale-context';
 import { type Locale, enUS } from 'date-fns/locale';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Clock } from 'lucide-react';
@@ -680,7 +681,7 @@ type DateTimePickerRef = {
 const DateTimePicker = React.forwardRef<Partial<DateTimePickerRef>, DateTimePickerProps>(
   (
     {
-      locale = enUS,
+      locale: localeProp,
       defaultPopupValue = new Date(new Date().setHours(0, 0, 0, 0)),
       value,
       onChange,
@@ -690,12 +691,15 @@ const DateTimePicker = React.forwardRef<Partial<DateTimePickerRef>, DateTimePick
       disabled = false,
       displayFormat,
       granularity = 'second',
-      placeholder = 'Pick a date',
+      placeholder: placeholderProp,
       className,
       ...props
     },
     ref,
   ) => {
+    const calendarLocale = useCalendarLocale();
+    const locale = localeProp ?? calendarLocale.locale;
+    const placeholder = placeholderProp ?? calendarLocale.pickDate;
     const [month, setMonth] = React.useState<Date>(value ?? defaultPopupValue);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const [displayDate, setDisplayDate] = React.useState<Date | undefined>(value ?? undefined);

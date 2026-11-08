@@ -12,6 +12,9 @@
  * would depend on one channel's module.
  */
 export const flowValidationCodes = {
+  supacrmVariableInvalid: "supacrmVariableInvalid",
+  supacrmProductRequired: "supacrmProductRequired",
+  supacrmProductInvalid: "supacrmProductInvalid",
   whatsappCarouselButtonsMismatch: "whatsappCarouselButtonsMismatch",
   whatsappCarouselLinkButtonNotAlone: "whatsappCarouselLinkButtonNotAlone",
   tiktokCardTitleTooLong: "tiktokCardTitleTooLong",
@@ -38,6 +41,11 @@ export const flowValidationCodes = {
   sendProductsSectionCountOutOfRange: "sendProductsSectionCountOutOfRange",
   sendProductsDuplicateProduct: "sendProductsDuplicateProduct",
   templateButtonOpenMiniAppUnsupported: "templateButtonOpenMiniAppUnsupported",
+  supacrmReminderInvalid: "supacrmReminderInvalid",
+  supacrmDataRequestInvalid: "supacrmDataRequestInvalid",
+  supacrmOperatorInvalid: "supacrmOperatorInvalid",
+  supacrmCheckoutInvalid: "supacrmCheckoutInvalid",
+  supacrmFormInvalid: "supacrmFormInvalid",
 } as const
 
 export type FlowValidationCode =

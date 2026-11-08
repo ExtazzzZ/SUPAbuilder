@@ -2,6 +2,16 @@
 
 This file summarizes how **ChatbotX** (this repository) is structured and how to work in it safely and consistently. Prefer it as a map; read adjacent code and `.agents/skills/*` for deep dives.
 
+## Терминология интеграции SUPAcrm
+
+Для задач SUPAcrm читать [утверждённый словарь проекта](../v0/docs/PROJECT_TERMINOLOGY.md). `bot-flow` — клиентский фронтенд бота, включая сообщения/кнопки до и после оплаты; `card-flow` — все действия с картами. Онбординг клиента идёт от первого сообщения до ссылки на оплату; процесс оформления — от успешной оплаты до выдачи необходимых данных для оформления подписки. Выдача/delivery-flow завершена после подтверждённой отправки ботом всех обязательных частей; ответ клиента/прочтение не нужны. Активация подписки — отдельный факт. Передача оператору называется `operator-flow` вместо `handoff`, дополнительные термины словаря также утверждены. Существующие технические идентификаторы API/БД/кода, включая `supacrm.handoff`, без отдельного совместимого изменения не переименовывать.
+
+## Навигация SUPAcrm (C/V)
+
+Для задач SUPAcrm в этом checkout (C) и доступном sibling `../v0` (V) Graphify — default структурная навигация на всех полезных этапах разработки: [канонический навык](../v0/.agents/skills/graphify-code-navigation/SKILL.md), [runbook](../v0/tools/graphify/README.md). Из C вызывать `python3 ../v0/tools/graphify/graphify_nav.py ...`; отдельной C-копии инструмента/навыка нет.
+Для literal text/filename первым остаётся `rg`; tiny edit не получает обязательный gate. В brief/review передавать profile/index key и bounded anchors; stale → явный узкий reindex, source guards/owning tests/runtime proof не заменяются графом.
+В этом scope раздел CodeGraph ниже остаётся дополнительным вариантом: его правило «before grep» не меняет этот routing. При недоступном sibling/tool продолжать обычную навигацию; автоматически строить CodeGraph index или ставить hooks не требуется.
+
 ## What this project is
 
 - **Product:** Open-source omnichannel chatbot platform (inbox, flow builder, AI agents, broadcasts, webhooks, public APIs, CLI, MCP).

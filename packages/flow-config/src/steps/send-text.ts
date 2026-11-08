@@ -24,6 +24,7 @@ import { stepTypes } from "./step-action"
  * `sendMessageNodeSchema` builds from it.
  */
 export const sendTextStepSchema = baseStepSchema.extend({
+  textFormat: z.enum(["plain", "html"]).optional(),
   stepType: z
     .literal(stepTypes.enum.sendText)
     .describe('Step type discriminator: "sendText" (sends a text message).'),

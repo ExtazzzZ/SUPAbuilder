@@ -40,6 +40,10 @@ export type ExecuteMultipleStepsProps = {
   }
   steps: BaseStepSchema[]
   trackingContext?: BotResponseTrackingContext
+  crmNavigation?: {
+    sourceEventId: string
+    updateMode?: "send_new" | "edit_previous"
+  }
   metadata?: MetadataPayload
   isBulkBroadcast?: boolean
   quickReplies?: ButtonStepProps[]
@@ -310,6 +314,7 @@ export async function sendFlow(
           triggerMessageId: props.triggerMessageId,
           triggerMessageCreatedAt: props.triggerMessageCreatedAt,
           startedByContactMessage: props.startedByContactMessage,
+          crmNavigation: props.crmNavigation,
           commentAnchor: props.commentAnchor,
           origin: webhookChannelOrigin(),
         },

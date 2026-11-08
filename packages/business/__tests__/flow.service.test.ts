@@ -1,8 +1,10 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
 const {
+  mockWithLegacyFlow,
+  mockDelete,
   mockAudit,
   mockCreateId,
   mockDbTransaction,
@@ -38,6 +40,8 @@ const {
   const mockUpdate = vi.fn(() => ({ set: mockUpdateSet }))
 
   return {
+    mockWithLegacyFlow: vi.fn(),
+    mockDelete: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })),
     mockAudit: vi.fn(),
     mockCreateId: vi.fn(),
     mockDbTransaction: vi.fn(),
@@ -72,6 +76,8 @@ const transaction = {
     },
   },
   insert: mockInsert,
+  update: mockUpdate,
+  delete: mockDelete,
 }
 
 vi.mock("@chatbotx.io/database/client", () => ({
@@ -111,11 +117,15 @@ vi.mock("@chatbotx.io/database/schema", () => ({
   flowVersionModel,
 }))
 
-vi.mock("@chatbotx.io/utils", () => ({
+vi.mock("@chatbotx.io/utils", async (original) => ({
+  ...(await original<typeof import("@chatbotx.io/utils")>()),
   createId: mockCreateId,
 }))
 
-vi.mock("@chatbotx.io/flow-config", () => ({
+vi.mock("@chatbotx.io/flow-config", async (original) => ({
+  assertDraftWrappers: (
+    await original<typeof import("@chatbotx.io/flow-config")>()
+  ).assertDraftWrappers,
   remapFlowGraphReferences: vi.fn(),
   sendMessageNodeDefaultFn: vi.fn(() => ({ id: "default-node-1" })),
   // Mirror the REAL runtime values (O01–O05) — a made-up shape would silently
@@ -174,6 +184,26 @@ vi.mock("../src/messenger-welcome-message-flow/service", () => ({
   },
 }))
 
+vi.mock("../src/supacrm-source-binding/service", () => ({
+  supacrmSourceBindingService: { withLegacyFlow: mockWithLegacyFlow },
+}))
+
+beforeEach(() => {
+  // Сбрасываем once-очереди: ранний отказ gate не должен отравлять следующий тест.
+  mockCreateId.mockReset()
+  mockInsertValues.mockReset().mockImplementation(() =>
+    Object.assign(Promise.resolve(undefined), {
+      returning: mockInsertReturning,
+    }),
+  )
+  mockDbTransaction.mockReset().mockImplementation((work) => work(transaction))
+  mockWithLegacyFlow
+    .mockReset()
+    .mockImplementation((_scope, work, tx) =>
+      tx ? work(tx) : mockDbTransaction(work),
+    )
+})
+
 const { flowService } = await import("../src/flow/service")
 
 describe("flowService.listPublishedOptions", () => {
@@ -197,6 +227,10 @@ describe("flowService.listPublishedOptions", () => {
 
 describe("flowService.duplicate", () => {
   afterEach(() => {
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation: "duplicate" },
+      expect.any(Function),
+    )
     vi.clearAllMocks()
   })
 
@@ -338,6 +372,15 @@ describe("flowService.duplicate", () => {
     ).rejects.toThrow("insert failed")
 
     expect(mockInsert).toHaveBeenCalledTimes(1)
+  })
+  test("DENY привязки не запускает чтение или вставку duplicate", async () => {
+    mockWithLegacyFlow.mockRejectedValueOnce(new Error("source_binding_denied"))
+    await expect(
+      flowService.duplicate({ workspaceId: "ws-1", id: "flow-1" }),
+    ).rejects.toThrow("source_binding_denied")
+    expect(mockFlowFindFirst).not.toHaveBeenCalled()
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(mockAudit).not.toHaveBeenCalled()
   })
 })
 
@@ -762,17 +805,32 @@ describe("flowService welcome message flow sync hooks", () => {
   })
 
   test("deleteMany enqueues one delete job for the deleted ids after commit", async () => {
-    mockFlowFindMany.mockResolvedValue([{ id: "flow-2" }, { id: "flow-3" }])
-    mockDbTransaction.mockResolvedValue(undefined)
+    mockFlowFindMany.mockResolvedValue([{ id: "10" }, { id: "2" }])
 
     await flowService.deleteMany({
       workspaceId: "ws-1",
-      ids: ["flow-2", "flow-3", "flow-404"],
+      ids: ["10", "2", "404"],
     })
 
+    expect(
+      mockWithLegacyFlow.mock.calls.map(([scope, , tx]) => ({ scope, tx })),
+    ).toEqual([
+      {
+        scope: { workspaceId: "ws-1", flowId: "2", operation: "delete" },
+        tx: transaction,
+      },
+      {
+        scope: { workspaceId: "ws-1", flowId: "10", operation: "delete" },
+        tx: transaction,
+      },
+    ])
+    expect(mockDbTransaction).toHaveBeenCalledTimes(1)
+    expect(mockWithLegacyFlow.mock.invocationCallOrder[1]).toBeLessThan(
+      mockDelete.mock.invocationCallOrder[0],
+    )
     expect(mockEnqueueDelete).toHaveBeenCalledWith({
       workspaceId: "ws-1",
-      flowIds: ["flow-2", "flow-3"],
+      flowIds: ["10", "2"],
     })
     expect(mockDbTransaction.mock.invocationCallOrder[0]).toBeLessThan(
       mockEnqueueDelete.mock.invocationCallOrder[0],
@@ -784,6 +842,25 @@ describe("flowService welcome message flow sync hooks", () => {
 
     await flowService.deleteMany({ workspaceId: "ws-1", ids: ["flow-404"] })
 
+    expect(mockEnqueueDelete).not.toHaveBeenCalled()
+  })
+})
+
+describe("Подключение guard к массовому удалению", () => {
+  afterEach(() => vi.clearAllMocks())
+  test("DENY в фактической транзакции запрещает удаление и последующую синхронизацию", async () => {
+    mockFlowFindMany.mockResolvedValue([{ id: "2" }])
+    mockWithLegacyFlow.mockRejectedValueOnce(new Error("source_binding_denied"))
+    await expect(
+      flowService.deleteMany({ workspaceId: "ws-1", ids: ["2"] }),
+    ).rejects.toThrow("source_binding_denied")
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "2", operation: "delete" },
+      expect.any(Function),
+      transaction,
+    )
+    expect(mockDelete).not.toHaveBeenCalled()
+    expect(mockUpdate).not.toHaveBeenCalled()
     expect(mockEnqueueDelete).not.toHaveBeenCalled()
   })
 })

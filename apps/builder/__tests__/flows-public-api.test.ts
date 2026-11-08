@@ -938,3 +938,51 @@ describe("POST /v1/flows/import", () => {
     expect(defaultQueue.add).not.toHaveBeenCalled()
   })
 })
+
+describe("GET /v1/flows/{id}/search", () => {
+  test("queries only the owning workspace draft and returns machine usable navigation", async () => {
+    flowService.findById.mockResolvedValue({
+      draftVersionId: "10",
+      flowVersions: [
+        {
+          id: "11",
+          isDraft: false,
+          nodes: [{ id: "999", type: "wait", data: { name: "Published" } }],
+          edges: [],
+        },
+        {
+          id: "10",
+          isDraft: true,
+          nodes: [
+            { id: "101", type: "sendMessage", data: { name: "Каталог Apple" } },
+          ],
+          edges: [],
+        },
+      ],
+    })
+    const procedure = findProcedure("GET", "/v1/flows/{id}/search")
+    expect(
+      await procedure.handler?.({
+        input: { id: "7", query: "APPLE" },
+        context: { workspace: { id: "ws-1" } },
+      }),
+    ).toEqual({
+      data: [{ nodeId: "101", label: "Каталог Apple", type: "sendMessage" }],
+      sections: [],
+      connections: [],
+    })
+    expect(flowService.findById).toHaveBeenCalledWith({
+      id: "7",
+      workspaceId: "ws-1",
+    })
+  })
+  test("propagates missing or foreign flow failures", async () => {
+    flowService.findById.mockRejectedValue(new Error("Flow not found"))
+    await expect(
+      findProcedure("GET", "/v1/flows/{id}/search").handler?.({
+        input: { id: "7", query: "" },
+        context: { workspace: { id: "ws-1" } },
+      }),
+    ).rejects.toThrow("Flow not found")
+  })
+})

@@ -1964,6 +1964,45 @@ export class ShardedMessageRepository implements IMessageRepository {
     return null
   }
 
+  /** Полная ограниченная выборка: частичный shard read не доказывает exact1. */
+  async findStatusCandidates(props: {
+    workspaceId: string
+    sourceId: string
+  }): Promise<MessageModel[]> {
+    const shards = await this.getConversationReadShards(
+      new Date(0),
+      props.workspaceId,
+    )
+    if (shards.length > 64) {
+      throw new Error("api_status_owner_limit")
+    }
+    const result: MessageModel[] = []
+    for (let offset = 0; offset < shards.length; offset += 4) {
+      const batches = await Promise.all(
+        shards.slice(offset, offset + 4).map(({ shard }) =>
+          this.shardManager.withShardClientForRead(shard, async (client) => {
+            const rows = await client
+              .select()
+              .from(messageModel)
+              .where(
+                and(
+                  eq(messageModel.workspaceId, props.workspaceId),
+                  eq(messageModel.sourceId, props.sourceId),
+                ),
+              )
+              .limit(65)
+            if (rows.length > 64) {
+              throw new Error("api_status_owner_limit")
+            }
+            return rows as MessageModel[]
+          }),
+        ),
+      )
+      result.push(...batches.flat())
+    }
+    return result
+  }
+
   async findBySourceId(
     sourceId: string,
     conversationId: string,

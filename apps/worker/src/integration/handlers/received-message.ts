@@ -139,6 +139,7 @@ import {
   isInstagramViaFacebook,
   resolveIntegrationContextFromContactInbox,
 } from "../../services/integrations"
+import { selectApiEntryFlow } from "../routing"
 import { isCommentReply, processCommentAutomation } from "./comment-automation"
 import { resolveLiveComment } from "./comment-automation/live-comment"
 import { runAsMissedCommentReplay } from "./comment-automation/replay-priority"
@@ -291,6 +292,18 @@ const isThirdPartyEcho = (props: {
 export const receiveMessage = async (
   props: IntegrationJobReceiveMessage["data"],
 ): Promise<{
+  entryFlowId?: string
+  crmFulfillmentContinuation?: {
+    fulfillmentRef: string
+    flowId: string
+    flowVersionId: string
+    terminalEventId: string
+    blockId: string
+  }
+  crmNavigation?: {
+    sourceEventId: string
+    updateMode?: "send_new" | "edit_previous"
+  }
   message: MessageWithAttachments | null
   conversation: ConversationModel
   postbackAction: string | null
@@ -713,6 +726,9 @@ export const receiveMessage = async (
             conversationId: conversation,
             contactInboxId: contactInbox,
             action: postbackAction,
+            crmNavigation: parsedMessage.crmNavigation,
+            crmFulfillmentContinuation:
+              parsedMessage.crmFulfillmentContinuation,
             ref,
             messageId: createdMessage?.id,
             payload: {
@@ -732,6 +748,9 @@ export const receiveMessage = async (
             conversationId: conversation,
             contactInboxId: contactInbox,
             action: quickReplyAction,
+            crmNavigation: parsedMessage.crmNavigation,
+            crmFulfillmentContinuation:
+              parsedMessage.crmFulfillmentContinuation,
             ref,
             messageId: createdMessage?.id,
           },
@@ -913,6 +932,14 @@ export const receiveMessage = async (
   })
 
   return {
+    crmNavigation: parsedMessage.crmNavigation,
+    crmFulfillmentContinuation: parsedMessage.crmFulfillmentContinuation,
+    entryFlowId: selectApiEntryFlow({
+      integrationType,
+      isNewContact,
+      text: incomingMessage?.text,
+      entryFlowId: parsedMessage.entryFlowId,
+    }),
     message: createdMessage,
     conversation,
     postbackAction,

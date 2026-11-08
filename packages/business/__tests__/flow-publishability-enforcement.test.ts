@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import {
+  createSupacrmCheckoutNode,
   sendMessageNodeDefaultFn,
   sendVideoStepDefaultFn,
 } from "@chatbotx.io/flow-config"
@@ -119,4 +120,61 @@ describe("flow publishability enforcement", () => {
     expect(mocks.dbTransaction).not.toHaveBeenCalled()
     expect(mocks.insert).not.toHaveBeenCalled()
   })
+})
+
+const invalidWrapperGraph = () => {
+  const node = createSupacrmCheckoutNode({}, "bonus")
+  node.data.details.supacrmCheckout = {
+    ...node.data.details.supacrmCheckout,
+    amountRUB: 100_000,
+  } as typeof node.data.details.supacrmCheckout
+  return { nodes: [node], edges: [], startNodeId: node.id }
+}
+test("createDraft rejects typed extras before folder or database mutation", async () => {
+  await expect(
+    flowService.createDraft({
+      workspaceId: "1",
+      data: { name: "bad", folderId: "2" },
+      graph: invalidWrapperGraph(),
+    }),
+  ).rejects.toThrow()
+  expect(mocks.dbTransaction).not.toHaveBeenCalled()
+  expect(mocks.ensureFolderExists).not.toHaveBeenCalled()
+})
+test("draft import rejects typed extras even without publish validation", () => {
+  expect(() =>
+    flowService.createFromImport({
+      workspaceId: "1",
+      name: "bad",
+      active: false,
+      enableInInbox: false,
+      validatePublishable: false,
+      ...invalidWrapperGraph(),
+    }),
+  ).toThrow()
+  expect(mocks.dbTransaction).not.toHaveBeenCalled()
+})
+test("import export rejects typed extras before manifest/database mutation", async () => {
+  await expect(
+    flowService.importFlowExport({
+      workspaceId: "1",
+      name: "bad",
+      active: false,
+      enableInInbox: false,
+      customFields: {},
+      botFields: {},
+      ...invalidWrapperGraph(),
+    }),
+  ).rejects.toThrow()
+  expect(mocks.dbTransaction).not.toHaveBeenCalled()
+})
+test("template published-default owner rejects typed extras before first insert", async () => {
+  await expect(
+    flowService.createPublishedDefault({ insert: mocks.insert } as never, {
+      workspaceId: "1",
+      name: "bad",
+      ...invalidWrapperGraph(),
+    }),
+  ).rejects.toThrow()
+  expect(mocks.insert).not.toHaveBeenCalled()
 })

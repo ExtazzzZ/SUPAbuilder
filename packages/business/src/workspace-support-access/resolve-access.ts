@@ -5,6 +5,7 @@ import type {
   WorkspaceModel,
 } from "@chatbotx.io/database/types"
 import { workspaceService } from "../workspace/service"
+import { isUserWorkspaceAllowed } from "../workspace/shared-workspace"
 import { workspaceMemberService } from "../workspace-member/service"
 import { resolveWorkspaceMembership } from "../workspace-member/synthetic"
 
@@ -32,6 +33,10 @@ export async function resolveWorkspaceAccess<
   | undefined
 > {
   const { realMember, workspaceId, user } = props
+
+  if (!isUserWorkspaceAllowed(workspaceId)) {
+    return
+  }
 
   const workspace =
     realMember?.workspace ??

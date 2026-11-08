@@ -76,9 +76,9 @@ describe("DateInput", () => {
 })
 
 describe("toDateFnsLocale", () => {
-  test("maps app locales and falls back to English", () => {
+  test("maps app locales and falls back to the Russian default", () => {
     expect(toDateFnsLocale("vi").code).toBe("vi")
     expect(toDateFnsLocale("pt-BR").code).toBe("pt-BR")
-    expect(toDateFnsLocale("xx").code).toBe("en-US")
+    expect(toDateFnsLocale("xx").code).toBe("ru")
   })
 })

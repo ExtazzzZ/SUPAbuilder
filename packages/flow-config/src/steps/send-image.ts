@@ -6,6 +6,8 @@ import { buttonStepSchema } from "./button"
 import { stepTypes } from "./step-action"
 
 export const sendImageStepSchema = baseStepSchema.extend({
+  caption: z.string().max(4096).optional(),
+  textFormat: z.enum(["plain", "html"]).optional(),
   stepType: z
     .literal(stepTypes.enum.sendImage)
     .describe('Step type discriminator: "sendImage".'),

@@ -22,9 +22,12 @@ import {
 import type { FlowModel, FlowVersionModel } from "@chatbotx.io/database/types"
 import { parsePagination } from "@chatbotx.io/database/utils"
 import {
+  assertDraftWrappers,
+  detachImportedReceiptEmailTemplates,
   type EdgeSchema,
   type FlowExportBotField,
   type FlowExportCustomField,
+  type FlowReferenceWarning,
   type FlowVersionSchema,
   remapFlowGraphReferences,
   sendMessageNodeDefaultFn,
@@ -40,6 +43,7 @@ import { assertFlowGraphPublishable, flowVersionService } from "../flow-version"
 import { folderService } from "../folder/service"
 import { messengerWelcomeMessageFlowService } from "../messenger-welcome-message-flow/service"
 import { type IdLabel, selectLabelsByIds } from "../select-labels-by-ids"
+import { supacrmSourceBindingService } from "../supacrm-source-binding/service"
 import { assertDeletable } from "../template/installed-resource.service"
 import {
   type FlowWithNodeVersions,
@@ -332,6 +336,7 @@ class FlowService extends BaseService {
       edges: FlowVersionModel["edges"]
     },
   ): Promise<string> {
+    assertDraftWrappers(input.nodes)
     const newFlowId = createId()
     const draftVersionId = createId()
     await tx.insert(flowModel).values({
@@ -388,6 +393,7 @@ class FlowService extends BaseService {
     draftVersionId: string
     publishedVersionId: string
   }> {
+    assertDraftWrappers(input.nodes)
     const flowId = createId()
     const draftVersionId = createId()
     const publishedVersionId = createId()
@@ -453,6 +459,9 @@ class FlowService extends BaseService {
       startNodeId: string
     }
   }): Promise<{ id: string }> {
+    if (input.graph) {
+      assertDraftWrappers(input.graph.nodes)
+    }
     const { workspaceId, data } = input
 
     if (data.folderId) {
@@ -595,34 +604,41 @@ class FlowService extends BaseService {
   }
 
   duplicate(input: { workspaceId: string; id: string }): Promise<string> {
-    return db.transaction(async (tx) => {
-      const flow = await this.findBy(input, tx)
-      if (!flow) {
-        throw notFoundException("Flow not found")
-      }
+    return supacrmSourceBindingService.withLegacyFlow(
+      {
+        workspaceId: input.workspaceId,
+        flowId: input.id,
+        operation: "duplicate",
+      },
+      async (tx) => {
+        const flow = await this.findBy(input, tx)
+        if (!flow) {
+          throw notFoundException("Flow not found")
+        }
 
-      const draftVersion = await flowVersionService.findDraft(
-        {
-          flowId: flow.id,
+        const draftVersion = await flowVersionService.findDraft(
+          {
+            flowId: flow.id,
+            workspaceId: flow.workspaceId,
+          },
+          tx,
+        )
+        if (!draftVersion) {
+          throw notFoundException("Draft version not found")
+        }
+
+        return this.insertFlowWithDraft(tx, {
+          name: `${flow.name} _copy`,
+          active: flow.active,
+          enableInInbox: flow.enableInInbox,
           workspaceId: flow.workspaceId,
-        },
-        tx,
-      )
-      if (!draftVersion) {
-        throw notFoundException("Draft version not found")
-      }
-
-      return this.insertFlowWithDraft(tx, {
-        name: `${flow.name} _copy`,
-        active: flow.active,
-        enableInInbox: flow.enableInInbox,
-        workspaceId: flow.workspaceId,
-        folderId: flow.folderId,
-        startNodeId: draftVersion.startNodeId,
-        nodes: draftVersion.nodes,
-        edges: draftVersion.edges,
-      })
-    })
+          folderId: flow.folderId,
+          startNodeId: draftVersion.startNodeId,
+          nodes: draftVersion.nodes,
+          edges: draftVersion.edges,
+        })
+      },
+    )
   }
 
   /**
@@ -648,6 +664,7 @@ class FlowService extends BaseService {
     tx?: DatabaseClient
     validatePublishable?: boolean
   }): Promise<string> {
+    assertDraftWrappers(input.nodes)
     if (input.validatePublishable ?? true) {
       assertFlowGraphPublishable({ nodes: input.nodes, edges: input.edges })
     }
@@ -695,7 +712,9 @@ class FlowService extends BaseService {
     flowId: string
     createdCustomFieldIds: string[]
     createdBotFieldIds: string[]
+    templateWarnings?: FlowReferenceWarning[]
   }> {
+    assertDraftWrappers(input.nodes)
     return await db.transaction(async (tx) => {
       const { idMap: customFieldIdMap, createdIds } =
         await resolveManifestIdMap(
@@ -713,8 +732,15 @@ class FlowService extends BaseService {
           tx,
         )
 
+      const graph =
+        input.sourceWorkspaceId === input.workspaceId
+          ? { nodes: input.nodes, edges: input.edges }
+          : detachImportedReceiptEmailTemplates({
+              nodes: input.nodes,
+              edges: input.edges,
+            })
       const remapped = remapFlowGraphReferences(
-        { nodes: input.nodes, edges: input.edges },
+        { nodes: graph.nodes, edges: graph.edges },
         { customField: customFieldIdMap, botField: botFieldIdMap },
         {
           // Pipeline assignees are workspace-specific: stripped when the export
@@ -756,6 +782,9 @@ class FlowService extends BaseService {
         flowId,
         createdCustomFieldIds: createdIds,
         createdBotFieldIds,
+        ...("warnings" in graph && graph.warnings.length
+          ? { templateWarnings: graph.warnings }
+          : {}),
       }
     })
   }
@@ -784,6 +813,19 @@ class FlowService extends BaseService {
     })
 
     await db.transaction(async (tx) => {
+      // Один ROOT и возрастающий порядок bigint: gate не отпускает locks до delete.
+      for (const flowId of [...flowIds].sort((a, b) => {
+        if (BigInt(a) < BigInt(b)) {
+          return -1
+        }
+        return BigInt(a) > BigInt(b) ? 1 : 0
+      })) {
+        await supacrmSourceBindingService.withLegacyFlow(
+          { workspaceId: input.workspaceId, flowId, operation: "delete" },
+          () => Promise.resolve(),
+          tx,
+        )
+      }
       await tx.delete(flowModel).where(inArray(flowModel.id, flowIds))
       await tx
         .update(flowAnalyticsSessionModel)

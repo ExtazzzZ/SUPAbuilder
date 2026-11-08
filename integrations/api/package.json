@@ -21,7 +21,9 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./**/*": "./src/**/*.ts"
+    "./**/*": "./src/**/*.ts",
+    "./lib/delivery": "./src/lib/delivery.ts",
+    "./schema": "./src/schema.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",

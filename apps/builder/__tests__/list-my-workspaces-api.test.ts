@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import z from "zod"
 
 type RouteConfig = {
@@ -47,7 +47,10 @@ const { authorizedAPI, capturedProcedures } = vi.hoisted(() => {
 vi.mock("@/orpc", () => ({ authorizedAPI }))
 
 const listByUserId = vi.fn()
-vi.mock("@chatbotx.io/business", () => ({
+vi.mock("@chatbotx.io/business", async () => ({
+  ...(await import(
+    "../../../packages/business/src/workspace/shared-workspace"
+  )),
   workspaceMemberService: { listByUserId },
 }))
 
@@ -85,8 +88,28 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+afterEach(() => vi.unstubAllEnvs())
+
 describe("GET /users/me/workspaces", () => {
   const procedure = findProcedure("GET", "/users/me/workspaces")
+
+  test("SUPAlogin lists only the configured shared workspace despite other memberships", async () => {
+    vi.stubEnv("SUPALOGIN_ISSUER", "https://login.example.test")
+    vi.stubEnv("SUPABUILDER_WORKSPACE_ID", "11759896832695848")
+    listByUserId.mockResolvedValue([
+      { workspaceId: "999", workspace: { id: "999", name: "Private" } },
+      {
+        workspaceId: "11759896832695848",
+        workspace: { id: "11759896832695848", name: "Shared" },
+      },
+    ])
+    const result = await procedure.handler?.({
+      context: { user: { id: "user-1" } },
+    })
+    expect(result).toEqual({
+      workspaces: [{ id: "11759896832695848", name: "Shared" }],
+    })
+  })
 
   test("output schema passes model fields through and drops unknown keys", () => {
     const parsed = procedure.outputSchema?.parse({

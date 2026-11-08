@@ -99,3 +99,5 @@ export * from "./workspace-api-token"
 export * from "./workspace-mac"
 export * from "./workspace-member"
 export * from "./workspace-purge"
+
+export * from "./api-history"

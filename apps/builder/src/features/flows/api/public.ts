@@ -5,7 +5,19 @@ import {
 } from "@chatbotx.io/business"
 import { validationException } from "@chatbotx.io/business/errors"
 import { importService } from "@chatbotx.io/business/import"
-import { stepTypes } from "@chatbotx.io/flow-config"
+import {
+  supacrmCatalogImageSchema,
+  supacrmCatalogResponseSchema,
+  supacrmCatalogService,
+} from "@chatbotx.io/business/supacrm-catalog"
+import {
+  edgeSchema,
+  flowNavigationResultSchema,
+  getReceiptEmailTemplateBase,
+  queryFlowGraph,
+  receiptEmailTemplateBaseSchema,
+  stepTypes,
+} from "@chatbotx.io/flow-config"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { DefaultJobAction, defaultQueue } from "@chatbotx.io/worker-config"
 import { z } from "zod"
@@ -31,21 +43,102 @@ import {
 import { resolveFlowGraphInput } from "../lib/resolve-flow-graph-input"
 import {
   createFlowRequest,
-  flowSpecRequest,
   publishFlowRequest,
   publishFlowSchema,
   updateDraftFlowRequest,
   updateFlowSchema,
+  validateFlowRequest,
 } from "../schema/action"
 import {
   flowResource,
   flowWithVersionsResource,
   welcomeMessageFlowResource,
 } from "../schema/resource"
+import { publicFulfillmentStatus } from "./fulfillment-status"
+import { receiptEmailTemplatePublicRouter } from "./receipt-email-template"
 
 const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("automation")
 
 export const flowsPublicRouter = {
+  fulfillmentStatus: publicFulfillmentStatus,
+  ...receiptEmailTemplatePublicRouter,
+  search: workspaceTokenAuthAPI
+    .route({
+      method: "GET",
+      path: "/v1/flows/{id}/search",
+      summary: "Search flow nodes",
+      description:
+        "Search the current draft by node name, id, type or product id. Get the flow id from flows.list. Returns original node ids, editor sections and distinct connection handles. Use flows.updateDraft with node.data.editorMetadata.section={id,title} to assign sections; removing that optional field dissolves membership without deleting nodes. Each section id must have one consistent title. Collapse and focus are local editor preferences.",
+      tags: ["Flows"],
+    })
+    .input(
+      publicIdParam("flow", "flows.list").extend({
+        query: z
+          .string()
+          .max(255)
+          .optional()
+          .describe(
+            "Case-insensitive node identity substring; omit for the full outline.",
+          ),
+      }),
+    )
+    .output(flowNavigationResultSchema)
+    .errors(possibleErrorsOnFindingResource)
+    .handler(async ({ input, context }) => {
+      const flow = await flowService.findById({
+        id: input.id,
+        workspaceId: context.workspace.id,
+      })
+      const draft = flow.flowVersions.find(
+        (version) => version.id === flow.draftVersionId && version.isDraft,
+      )
+      return queryFlowGraph({
+        nodes: draft?.nodes ?? [],
+        edges: z.array(edgeSchema).parse(draft?.edges ?? []),
+        query: input.query,
+      })
+    }),
+  crmCatalogImage: workspaceTokenAuthAPI
+    .route({
+      method: "GET",
+      path: "/v1/flows/crm-catalog/{itemId}/image",
+      summary: "Get CRM product image",
+      description:
+        "Use a product UUID returned by flows.crmCatalog to fetch its current image through the authenticated server boundary. The result contains a bounded WebP data URL; catalog credentials and upstream URLs are never exposed.",
+      tags: ["Flows"],
+      spec: mcpSpec({ visibility: "hidden" }),
+    })
+    .input(
+      z.object({
+        itemId: z
+          .uuid()
+          .describe(
+            "CRM product UUID returned by flows.crmCatalog; not a flow node id or bot registry id.",
+          ),
+      }),
+    )
+    .errors(possibleErrorsOnFindingResource)
+    .output(supacrmCatalogImageSchema)
+    .handler(async ({ input, context }) =>
+      supacrmCatalogService.image({
+        workspaceId: context.workspace.id,
+        itemId: input.itemId,
+      }),
+    ),
+  crmCatalog: workspaceTokenAuthAPI
+    .route({
+      method: "GET",
+      path: "/v1/flows/crm-catalog",
+      summary: "List CRM products",
+      description:
+        "Read current products from the server-configured CRM catalog before adding a product node with flows.updateDraft or flows.publish. Store only the selected catalogItemId in supacrmProduct metadata and use its catalog.detail API-channel marker; CRM resolves current tariffs and prices at runtime. Use flows.crmCatalogImage for authenticated image access.",
+      tags: ["Flows"],
+      spec: mcpSpec({ visibility: "hidden" }),
+    })
+    .output(supacrmCatalogResponseSchema)
+    .handler(async ({ context }) =>
+      supacrmCatalogService.list({ workspaceId: context.workspace.id }),
+    ),
   list: workspaceTokenAuthAPI
     .route({
       method: "GET",
@@ -124,7 +217,12 @@ export const flowsPublicRouter = {
     .input(publicIdParam("flow", "flows.list"))
     .output(
       flowWithVersionsResource.and(
-        z.object({ welcomeMessageFlows: z.array(welcomeMessageFlowResource) }),
+        z.object({
+          welcomeMessageFlows: z.array(welcomeMessageFlowResource),
+          draftTemplateBase: receiptEmailTemplateBaseSchema.describe(
+            "Acknowledged template metadata from the current DRAFT only. Echo as expectedTemplateBase when saving or publishing this draft; published history is not a valid base.",
+          ),
+        }),
       ),
     )
     .errors(possibleErrorsOnFindingResource)
@@ -137,7 +235,13 @@ export const flowsPublicRouter = {
           flowId: input.id,
         }),
       ])
-      return { ...flow, welcomeMessageFlows }
+      return {
+        ...flow,
+        welcomeMessageFlows,
+        draftTemplateBase: getReceiptEmailTemplateBase(
+          flow.flowVersions.find((version) => version.isDraft)?.nodes ?? [],
+        ),
+      }
     }),
 
   listNodes: workspaceTokenAuthAPI
@@ -283,7 +387,7 @@ export const flowsPublicRouter = {
       path: "/v1/flows/{id}/publish",
       summary: "Publish flow",
       description:
-        "Creates an immutable version from a draft and synchronizes the draft to match. Call `flows.validate` before this when supplying a spec, or use `flows.updateDraft` to save changes without publishing. Also syncs the Meta welcome message flow on every Messenger page (best-effort, asynchronous); read the ids from `flows.get`.",
+        "Creates an immutable version from a draft and synchronizes the draft to match. For template-related graphs, echo draftTemplateBase from flows.get as expectedTemplateBase; a stale or omitted base rejects publishing. Call `flows.validate` before this when supplying a spec, or use `flows.updateDraft` to save changes without publishing. Also syncs the Meta welcome message flow on every Messenger page (best-effort, asynchronous); read the ids from `flows.get`.",
       successStatus: 204,
       tags: ["Flows"],
       spec: mcpSpec({ visibility: "default" }),
@@ -302,6 +406,7 @@ export const flowsPublicRouter = {
         flowId: id,
         nodes,
         edges,
+        expectedTemplateBase: input.expectedTemplateBase,
       })
     }),
 
@@ -309,9 +414,9 @@ export const flowsPublicRouter = {
     .route({
       method: "POST",
       path: "/v1/flows/validate",
-      summary: "Compile and validate flow spec without publishing",
+      summary: "Validate flow spec or native graph without publishing",
       description:
-        "Compiles a flow-spec DSL object (see `GET /v1/schemas/flow-spec`) and validates the result exactly like `flows.publish` would, without persisting anything. On success, returns the compiled node/edge graph. On failure, returns a 422 with structured errors (`path`/`code`/`message`/`hint`/`candidates`) — fix and retry before calling `flows.publish`.",
+        "Accepts either `{ spec }` with a flow-spec DSL object (see `GET /v1/schemas/flow-spec`) or `{ graph: { nodes, edges } }` with the full native graph returned by flows.get or authored for flows.publish. These envelopes are mutually exclusive. Native Product, checkout and fulfillment blocks use the same publish owner schema, required core fields, settings and ports as the UI. Validates exactly like `flows.publish` without persisting anything. On success, returns the validated node/edge graph; specs are compiled first. On failure, returns a 422 with structured errors (`path`/`code`/`message`/`hint`/`candidates`) — fix and retry before calling `flows.publish`.",
       tags: ["Flows"],
       spec: mcpSpec({
         hitlPolicy: "none",
@@ -319,14 +424,14 @@ export const flowsPublicRouter = {
         visibility: "default",
       }),
     })
-    .input(flowSpecRequest)
+    .input(validateFlowRequest)
     .output(publishFlowSchema)
     .errors(possibleErrorsOnMutatingResource)
     .handler(async ({ context, input }) => {
-      const { nodes, edges } = await compileAndValidateSpec(
-        input.spec,
-        context.workspace.id,
-      )
+      const { nodes, edges } =
+        "graph" in input
+          ? input.graph
+          : await compileAndValidateSpec(input.spec, context.workspace.id)
       return { nodes, edges }
     }),
 
@@ -336,7 +441,7 @@ export const flowsPublicRouter = {
       path: "/v1/flows/{id}/draft",
       summary: "Update flow draft",
       description:
-        "Overwrites the draft version's nodes/edges in place, without publishing. Accepts either the raw `{ nodes, edges }` graph the builder UI sends, or `{ spec }` compiled server-side into that same graph — draft nodes are not otherwise validated (see `flows.validate` to check a spec before writing it). Unlike `flows.create`, a raw node's `id` is persisted verbatim, not remapped, so it must already be a numeric string (the same format `flows.create`'s `nodeIds` response and `flows.get` return).",
+        "Overwrites the draft version's nodes/edges in place, without publishing. For template-related graphs, echo the current draftTemplateBase from flows.get as expectedTemplateBase; a stale or omitted base rejects the write. For Event Reminder use strict supacrmReminder metadata with reminder.schedule marker and fired/cancelled opaque outputs, anchor order_created/link_issued/paid/delivered/customer_confirmed (verified Apple customer confirmation), delaySeconds (0-2592000), action message/continue, message and cancelOnPaid/cancelOnReply/cancelOnOrderCancelled booleans. CRM derives the current owned order and verified anchor, uses scheduler/outbox, silently accepts scheduling and never retries unknown sends. For Request Data use strict supacrmDataRequest metadata, matching input.request marker, 3 opaque received/cancelled/timeout outputs, a CRM variableKey in input.* namespace, valueType email/number/text/phone, prompt/invalidMessage, maxAttempts (1-10), timeoutSeconds (30-86400) and confirmation settings. Values are encrypted CRM native input variables, separate from receipt email and imported MAIN variables. For a native CRM operator block use sendMessage/API with strict supacrmOperator settings (reason, queue, nullable positive assigneeId, stage onboarding/fulfillment/support, includeCurrentOrder, dataKeys, message), matching operator.request marker and two opaque outputs: created/error. The created branch runs immediately; CRM pauses customer messages until resumed. For native CRM checkout, use SendMessage/API nodes with strict supacrmCheckout metadata (promo, bonus, referral_summary, offer, receipt, link, wait), a matching SUPACRM_ACTION_V1 checkout.* sendText marker, and 5/5/3/4/3/6/3 opaque quickReply output ports respectively. Benefits accept presentation labels only: promo skipLabel; bonus skipLabel/confirmLabel; referral_summary continueLabel. No balance/reward setters or graph-callable award. Product can precede optional benefit steps then Offer on the same quote. Other settings contain only prompt, cancelLabel and wait timeoutSeconds (30-86400); CRM owns price, quote, order and verified payment. Connect Product tariff selection to offer, receipt, optional existing Email, link and wait. Unknown never authorizes retry. Accepts either the raw `{ nodes, edges }` graph the builder UI sends, or `{ spec }` compiled server-side into that same graph — draft nodes are not otherwise validated (see `flows.validate` to check a spec or full native graph before writing it). Unlike `flows.create`, a raw node's `id` is persisted verbatim, not remapped, so it must already be a numeric string (the same format `flows.create`'s `nodeIds` response and `flows.get` return).",
       successStatus: 204,
       tags: ["Flows"],
       spec: mcpSpec({ visibility: "default" }),
@@ -355,6 +460,7 @@ export const flowsPublicRouter = {
         flowId: id,
         nodes,
         edges,
+        expectedTemplateBase: input.expectedTemplateBase,
       })
     }),
 

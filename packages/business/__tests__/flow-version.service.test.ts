@@ -1,8 +1,10 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
 const {
+  mockWithLegacyFlow,
+  mockTxFindFirst,
   mockFindFirst,
   mockFindFlow,
   mockUpdateSet,
@@ -16,6 +18,8 @@ const {
   const mockDbUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet })
 
   return {
+    mockWithLegacyFlow: vi.fn(),
+    mockTxFindFirst: vi.fn(),
     mockFindFirst: vi.fn(),
     mockFindFlow: vi.fn(),
     mockUpdateSet,
@@ -72,6 +76,22 @@ vi.mock("../src/base.service", () => ({
     }
   },
 }))
+
+const transaction = {
+  query: { flowVersionModel: { findFirst: mockTxFindFirst } },
+  update: mockDbUpdate,
+}
+vi.mock("../src/supacrm-source-binding/service", () => ({
+  supacrmSourceBindingService: { withLegacyFlow: mockWithLegacyFlow },
+}))
+beforeEach(() => {
+  mockTxFindFirst
+    .mockReset()
+    .mockImplementation((input) => mockFindFirst(input))
+  mockWithLegacyFlow
+    .mockReset()
+    .mockImplementation((_scope, work, tx) => work(tx ?? transaction))
+})
 
 const { flowVersionService } = await import("../src/flow-version/service")
 
@@ -152,6 +172,10 @@ describe("flowVersionService.findPublished", () => {
 
 describe("flowVersionService.revertDraftToPublished", () => {
   afterEach(() => {
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation: "revert" },
+      expect.any(Function),
+    )
     vi.clearAllMocks()
   })
 
@@ -379,5 +403,97 @@ describe("flowVersionService.getMessengerAdsStartNode", () => {
       flowVersionId: "v1",
       startNode: published.nodes[0],
     })
+  })
+})
+
+describe("Транзакция владельца при изменении draft", () => {
+  afterEach(() => vi.clearAllMocks())
+  test("Перед записью draft повторно читается с точным Flow/workspace под guard", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "draft-1",
+      flowId: "flow-1",
+      nodes: [],
+      edges: [],
+    })
+    mockTxFindFirst.mockResolvedValueOnce({
+      id: "draft-1",
+      flowId: "flow-1",
+      nodes: [],
+      edges: [],
+    })
+    await flowVersionService.updateDraft({
+      workspaceId: "ws-1",
+      id: "draft-1",
+      nodes: [],
+      edges: [],
+    })
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation: "updateDraft" },
+      expect.any(Function),
+    )
+    expect(mockTxFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "draft-1",
+        flowId: "flow-1",
+        workspaceId: "ws-1",
+        isDraft: true,
+      },
+    })
+    expect(mockWithLegacyFlow.mock.invocationCallOrder[0]).toBeLessThan(
+      mockTxFindFirst.mock.invocationCallOrder[0],
+    )
+    expect(mockTxFindFirst.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDbUpdate.mock.invocationCallOrder[0],
+    )
+    expect(mockUpdateSet).toHaveBeenCalledWith({ nodes: [], edges: [] })
+  })
+  test("Исчезнувший при повторном чтении draft запрещает запись", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "draft-1",
+      flowId: "flow-1",
+      nodes: [],
+      edges: [],
+    })
+    mockTxFindFirst.mockResolvedValueOnce(undefined)
+    await expect(
+      flowVersionService.updateDraft({
+        workspaceId: "ws-1",
+        id: "draft-1",
+        nodes: [],
+        edges: [],
+      }),
+    ).rejects.toThrow("Draft flow version not found")
+    expect(mockDbUpdate).not.toHaveBeenCalled()
+  })
+  test.each([
+    "updateDraft",
+    "revert",
+  ])("DENY для привязанного Flow и %s запрещает запись", async (operation) => {
+    mockFindFirst.mockResolvedValue({
+      id: "draft-1",
+      flowId: "flow-1",
+      nodes: [],
+      edges: [],
+    })
+    mockWithLegacyFlow.mockRejectedValueOnce(new Error("source_binding_denied"))
+    const operationCall =
+      operation === "updateDraft"
+        ? flowVersionService.updateDraft({
+            workspaceId: "ws-1",
+            id: "draft-1",
+            nodes: [],
+            edges: [],
+          })
+        : flowVersionService.revertDraftToPublished({
+            workspaceId: "ws-1",
+            flowId: "flow-1",
+          })
+    await expect(operationCall).rejects.toThrow("source_binding_denied")
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation },
+      expect.any(Function),
+    )
+    expect(mockTxFindFirst).not.toHaveBeenCalled()
+    expect(mockDbUpdate).not.toHaveBeenCalled()
   })
 })

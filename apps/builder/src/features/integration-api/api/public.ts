@@ -1,10 +1,18 @@
+import {
+  ApiHistoryPendingMessageError,
+  apiHistorySchema,
+  projectApiHistory,
+  supacrmFulfillmentService,
+} from "@chatbotx.io/business"
 import { incomingApiMessageSchema } from "@chatbotx.io/integration-api"
 import { enqueueIntegrationJob } from "@chatbotx.io/worker-config"
+import { ORPCError } from "@orpc/server"
 import { z } from "zod"
 import { logger } from "@/lib/log"
 import { possibleErrorsOnCreatingResource } from "@/lib/orpc/orpc-error-helper"
 import { assertApiNotRateLimited } from "@/lib/rate-limit/api-rate-limit"
 import { channelApiTokenAPI } from "@/orpc"
+import { deliveryStatusJobOptions } from "../lib/delivery-status-job"
 
 const assertNotRateLimited = (
   inboxId: string,
@@ -17,6 +25,67 @@ const assertNotRateLimited = (
   })
 
 export const channelsPublicRouter = {
+  fulfillmentScope: channelApiTokenAPI
+    .route({
+      method: "POST",
+      path: "/v1/channels/api/fulfillment-scope",
+      summary: "Проверить владельца native исполнения",
+      tags: ["API Channel"],
+    })
+    .input(z.object({ flowId: z.string().regex(/^\d+$/) }))
+    .output(
+      z.object({
+        workspaceId: z.string(),
+        inboxId: z.string(),
+        flowId: z.string(),
+      }),
+    )
+    .handler(({ input, context }) =>
+      supacrmFulfillmentService.scope({
+        flowId: input.flowId,
+        workspaceId: context.workspace.id,
+        inboxId: context.inbox.id,
+      }),
+    ),
+  history: channelApiTokenAPI
+    .route({
+      method: "POST",
+      path: "/v1/channels/api/history",
+      summary: "Записать историю без запуска bot-flow",
+      description:
+        "Проекция уже обработанных входящих и исходящих сообщений. Bearer-токен ограничен одним API inbox. sourceId и createdAt неизменяемы; revision растёт для правок/статусов. Повтор или устаревшая ревизия не меняет историю. Триггеры, отправки и платёжные действия не выполняются.",
+      tags: ["API Channel"],
+    })
+    .input(apiHistorySchema)
+    .output(
+      z.object({
+        accepted: z.boolean(),
+        messageId: z.string(),
+        changed: z.boolean(),
+      }),
+    )
+    .errors({
+      ...possibleErrorsOnCreatingResource,
+      CONFLICT: {
+        status: 409,
+        message: "Исходное сообщение ещё не появилось в истории",
+      },
+    })
+    .handler(async ({ context, input }) => {
+      await assertNotRateLimited(context.inbox.id, context.resHeaders)
+      try {
+        return await projectApiHistory({
+          workspaceId: context.workspace.id,
+          inboxId: context.inbox.id,
+          input,
+        })
+      } catch (error) {
+        if (error instanceof ApiHistoryPendingMessageError) {
+          throw new ORPCError("CONFLICT", { message: error.message })
+        }
+        throw error
+      }
+    }),
   sendMessage: channelApiTokenAPI
     .route({
       method: "POST",
@@ -152,14 +221,17 @@ export const channelsPublicRouter = {
     .handler(async ({ context, input }) => {
       await assertNotRateLimited(context.inbox.id, context.resHeaders)
 
-      await enqueueIntegrationJob({
-        type: "messageStatus",
-        data: {
-          integrationType: "api",
-          integrationIdentifier: context.inbox.id,
-          payload: input,
+      await enqueueIntegrationJob(
+        {
+          type: "messageStatus",
+          data: {
+            integrationType: "api",
+            integrationIdentifier: context.inbox.id,
+            payload: input,
+          },
         },
-      })
+        await deliveryStatusJobOptions(context.inbox.id, input),
+      )
     }),
 
   me: channelApiTokenAPI

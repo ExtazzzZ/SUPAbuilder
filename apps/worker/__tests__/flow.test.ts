@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import type { FlowVersionModel } from "@chatbotx.io/database/types"
 import type {
   BaseStepSchema,
@@ -6,10 +7,19 @@ import type {
   FlowNode,
   StepType,
 } from "@chatbotx.io/flow-config"
-import { encodeButtonPayload, stepTypes } from "@chatbotx.io/flow-config"
+import {
+  createSupacrmDataRequestNode,
+  createSupacrmOperatorNode,
+  createSupacrmReminderNode,
+  encodeButtonPayload,
+  sendMessageNodeDefaultFn,
+  sendTextStepDefaultFn,
+  stepTypes,
+} from "@chatbotx.io/flow-config"
 import { SdkException } from "@chatbotx.io/sdk"
 import type { IntegrationJobRunFlowNode } from "@chatbotx.io/worker-config"
 import { beforeEach, describe, expect, type Mock, test, vi } from "vitest"
+import { signApiPayload } from "../../../integrations/api/src/lib/signature"
 
 // --- mocks ---
 
@@ -20,10 +30,26 @@ const detectConversationAndContactInbox = vi.fn()
 const detectFlowVersion = vi.fn()
 const findSendableBroadcast = vi.fn()
 const resetContactForResume = vi.fn()
+const getDocumentBinding = vi.fn()
+const verifyFulfillmentContinuation = vi.fn()
+
+beforeEach(() => {
+  // Legacy fixtures используют отдельный port; настоящий guard проверяется своей PG-suite.
+  getDocumentBinding
+    .mockReset()
+    .mockImplementation((scope) =>
+      Promise.resolve({ kind: "legacy", ...scope }),
+    )
+})
 
 const recordContactActivity = vi.fn(async (..._args: unknown[]) => true)
 
 vi.mock("@chatbotx.io/business", () => ({
+  supacrmSourceBindingService: { getDocumentBinding },
+  fulfillmentStatusService: {
+    continuation: (...args: unknown[]) =>
+      verifyFulfillmentContinuation(...args),
+  },
   contactActivityService: {
     record: (...args: unknown[]) => recordContactActivity(...args),
   },
@@ -130,6 +156,7 @@ function makeFlowVersion(
   return {
     id: "fv-1",
     flowId: "flow-1",
+    workspaceId: "ws-1",
     nodes: nodes as unknown as FlowVersionModel["nodes"],
     edges: edges as unknown as FlowVersionModel["edges"],
   } as FlowVersionModel
@@ -178,6 +205,112 @@ function makeQuickReply(id = "qr-1", label = "Yes"): ButtonStepProps {
 function mockSpy(obj: unknown, name: string): Mock {
   return vi.spyOn(obj as never, name as never) as unknown as Mock
 }
+
+describe("Source binding: запрет legacy effects и rich fallback", () => {
+  beforeEach(() => {
+    integrationQueueAdd.mockClear()
+    chatQueueAdd.mockClear()
+    findRichResponseByButton.mockClear()
+    detectFlowVersion.mockReset()
+    detectConversationAndContactInbox.mockResolvedValue({
+      conversation: makeConversation(),
+      contactInbox: makeContactInbox(),
+    })
+  })
+
+  test("legacy step проходит точный owning scope перед handler", async () => {
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    const handler = mockSpy(flowStepHandlers, "sendText").mockResolvedValue({
+      status: "wait",
+      result: null,
+    })
+    await expect(
+      executeMultipleSteps({ ...makeBaseProps(), steps: [makeStep()] }),
+    ).resolves.toMatchObject({ status: "wait" })
+    expect(getDocumentBinding).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      flowId: "flow-1",
+    })
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(getDocumentBinding.mock.invocationCallOrder[0]).toBeLessThan(
+      handler.mock.invocationCallOrder[0],
+    )
+  })
+
+  test.each([
+    "source",
+    "blocked",
+  ])("%s не выполняет cached step и не ставит continuation", async (kind) => {
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    const handler = mockSpy(flowStepHandlers, "sendText").mockResolvedValue({
+      status: "success",
+    })
+    getDocumentBinding.mockResolvedValueOnce(
+      kind === "source"
+        ? {
+            kind,
+            bindingId: "binding-1",
+            workspaceId: "ws-1",
+            flowId: "flow-1",
+          }
+        : { kind, code: "source_binding_unavailable" },
+    )
+    await expect(
+      executeMultipleSteps({ ...makeBaseProps(), steps: [makeStep()] }),
+    ).rejects.toThrow("FlowVersion unavailable")
+    expect(getDocumentBinding).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      flowId: "flow-1",
+    })
+    expect(handler).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+    expect(chatQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("чужой workspace cached version закрыт до обращения к binding port", async () => {
+    const version = { ...makeFlowVersion(), workspaceId: "other-workspace" }
+    await expect(
+      executeMultipleSteps({ ...makeBaseProps(version), steps: [makeStep()] }),
+    ).rejects.toThrow("FlowVersion unavailable")
+    expect(getDocumentBinding).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+    expect(chatQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ["source", runFlowPostback],
+    ["blocked", runFlowPostback],
+    ["source", runFlowQuickReply],
+    ["blocked", runFlowQuickReply],
+  ] as const)("%s закрывает postback/quickReply до rich fallback", async (kind, run) => {
+    const flowId = "11612473309626368"
+    getDocumentBinding.mockResolvedValueOnce(
+      kind === "source"
+        ? { kind, bindingId: "binding-1", workspaceId: "ws-1", flowId }
+        : { kind, code: "source_binding_unavailable" },
+    )
+    await expect(
+      run({
+        conversationId: "conv-1",
+        contactInboxId: "ci-1",
+        ref: null,
+        action: encodeButtonPayload({ flowId, buttonId: "11612473309626370" }),
+      }),
+    ).resolves.toBeUndefined()
+    expect(getDocumentBinding).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      flowId,
+    })
+    expect(findRichResponseByButton).not.toHaveBeenCalled()
+    expect(detectFlowVersion).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+    expect(chatQueueAdd).not.toHaveBeenCalled()
+  })
+})
 
 // --- tests ---
 
@@ -283,6 +416,47 @@ describe("flow action channel gating (bare flow ID)", () => {
       useLatestFlowVersion: true,
     })
   }
+
+  test.each([
+    ["postback", runFlowPostback],
+    ["quickReply", runFlowQuickReply],
+  ])("CRM %s с адресом узла сохраняет связь перехода после Назад", async (_kind, run) => {
+    mockChannel("api")
+    const node = (id: string, isStartNode: boolean): FlowNode => ({
+      id,
+      position: { x: 0, y: 0 },
+      measured: { width: 100, height: 100 },
+      data: { name: id, isStartNode, details: { steps: [] } },
+    })
+    detectFlowVersion.mockResolvedValue({
+      flowVersion: makeFlowVersion(
+        [node("100", true), node("555", false), node("666", false)],
+        [
+          {
+            id: "e1",
+            source: "555",
+            sourceHandle: "555",
+            target: "666",
+            targetHandle: "input",
+          },
+        ],
+      ),
+      useLatestFlowVersion: true,
+    })
+    const crmNavigation = { sourceEventId: "telegram-back-42" }
+    await run({
+      conversationId: "conv-1",
+      contactInboxId: "ci-1",
+      action: encodeButtonPayload({ flowId: BARE_FLOW_ID, nodeId: "555" }),
+      crmNavigation,
+    })
+    expect(integrationQueueAdd).toHaveBeenCalledWith(
+      "sendFlow",
+      expect.objectContaining({
+        data: expect.objectContaining({ crmNavigation }),
+      }),
+    )
+  })
 
   test("messenger bare flow ID postback runs the flow start node", async () => {
     mockChannel("messenger")
@@ -504,6 +678,48 @@ describe("flow action target resolution", () => {
     } as never)
 
     expect(clearQuickReplyChallengeOnTap).toHaveBeenCalledOnce()
+  })
+
+  test("native continuation сохраняет exact version в следующем queued node", async () => {
+    mockFlowWithReply({
+      steps: [],
+      quickReplies: [makeQuickReply(REPLY_ID, "Yes")],
+    })
+    const { flowVersion } = await detectFlowVersion()
+    flowVersion.id = FLOW_VERSION_ID
+    detectFlowVersion.mockClear()
+    verifyFulfillmentContinuation.mockResolvedValue(flowVersion)
+    await runFlowPostback({
+      conversationId: "conv-1",
+      contactInboxId: "ci-1",
+      action: replyAction(),
+      crmNavigation: { sourceEventId: "fulfillment-wait:one" },
+      crmFulfillmentContinuation: {
+        fulfillmentRef: "ref",
+        flowId: FLOW_ID,
+        flowVersionId: FLOW_VERSION_ID,
+        terminalEventId: "fulfillment-wait:one",
+        blockId: "block",
+      },
+    } as never)
+    expect(detectFlowVersion).not.toHaveBeenCalled()
+    expectAdvancedToNextNode()
+    expect(integrationQueueAdd.mock.calls[0][1]).toMatchObject({
+      data: { flowVersionId: FLOW_VERSION_ID },
+    })
+    integrationQueueAdd.mockClear()
+    verifyFulfillmentContinuation.mockRejectedValue(
+      new Error("fulfillment_pinned_version_unavailable"),
+    )
+    await expect(
+      runFlowPostback({
+        conversationId: "conv-1",
+        contactInboxId: "ci-1",
+        action: replyAction(),
+        crmFulfillmentContinuation: {},
+      } as never),
+    ).rejects.toThrow("fulfillment_pinned_version_unavailable")
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
   })
 
   test("runFlowPostback advances the flow for a node quick reply", async () => {
@@ -1674,6 +1890,38 @@ describe("runStepsAndQuickReplies — per-step re-dispatch", () => {
       { data: { startFromStepId: string } },
     ]
     expect(nextJob.data.startFromStepId).toBe("step-2")
+  })
+
+  test("передаёт восемь быстрых ответов узла вместе с API-фотографией и HTML-подписью", async () => {
+    const quickReplies = Array.from({ length: 8 }, (_, index) => ({
+      ...makeQuickReply(`qr-${index}`, `Кнопка ${index + 1}`),
+      row: Math.floor(index / 2),
+    }))
+    const imageStep = {
+      ...makeStep("sendImage"),
+      id: "source-image",
+      mode: "url",
+      url: "https://example.com/original.png",
+      caption: "<b>Исходное меню</b>",
+      textFormat: "html",
+      buttons: [],
+    }
+    await runStepsAndQuickReplies({
+      ...makeBaseProps(),
+      contactInbox: { ...makeContactInbox(), channel: "api" },
+      details: { steps: [imageStep], quickReplies },
+      triggerNextNode: false,
+    })
+
+    expect(chatQueueAdd).toHaveBeenCalledOnce()
+    const [, queued] = chatQueueAdd.mock.calls[0] as unknown as [
+      string,
+      unknown,
+    ]
+    expect(queued).toMatchObject({
+      data: { step: imageStep, quickReplies },
+    })
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
   })
 
   test("attaches quick replies to an image carrier for whatsapp", async () => {
@@ -2999,3 +3247,335 @@ describe("runStepsAndQuickReplies — quick reply settings", () => {
     }
   })
 })
+
+test("сохраняет явную причину меню при следующем шаге очереди", async () => {
+  integrationQueueAdd.mockClear()
+  chatQueueAdd.mockClear()
+  const crmNavigation = { sourceEventId: "event-menu-42" }
+  await runStepsAndQuickReplies({
+    ...makeBaseProps(),
+    details: {
+      steps: [
+        { ...makeStep("sendText"), id: "menu-1" },
+        { ...makeStep("sendText"), id: "menu-2" },
+      ],
+    },
+    triggerNextNode: false,
+    crmNavigation,
+  })
+  expect(chatQueueAdd).toHaveBeenCalledWith(
+    "sendFlowMessage",
+    expect.objectContaining({
+      data: expect.objectContaining({ crmNavigation }),
+    }),
+  )
+  expect(integrationQueueAdd).toHaveBeenCalledWith(
+    "sendFlow",
+    expect.objectContaining({
+      data: expect.objectContaining({ crmNavigation }),
+    }),
+  )
+})
+
+describe("CRM plain terminal producer", () => {
+  const terminalStep = sendTextStepDefaultFn({
+    text: "Оплата подтверждена",
+    buttons: [],
+  })
+  const correlation = { sourceEventId: "resume-event-42" }
+  const apiProps = () => {
+    const terminal = sendMessageNodeDefaultFn({
+      nodeProps: { id: "node-1" },
+      detailProps: { steps: [terminalStep] },
+    })
+    terminal.data.details.beforeStep.channel = "api"
+    return {
+      ...makeBaseProps(makeFlowVersion([terminal])),
+      contactInbox: { id: "ci-1", contactId: "contact-1", channel: "api" },
+      crmNavigation: correlation,
+      details: terminal.data.details,
+    }
+  }
+
+  beforeEach(() => {
+    chatQueueAdd.mockClear()
+    integrationQueueAdd.mockClear()
+  })
+
+  function sentNavigation() {
+    expect(chatQueueAdd).toHaveBeenCalledOnce()
+    return (
+      chatQueueAdd.mock.calls[0] as unknown as [
+        string,
+        { data: { crmNavigation?: unknown } },
+      ]
+    )[1].data.crmNavigation
+  }
+
+  test("последний plain terminal выпускает существующий явный send_new", async () => {
+    const props = apiProps()
+    detectConversationAndContactInbox.mockResolvedValue({
+      conversation: props.conversation,
+      contactInbox: props.contactInbox,
+    })
+    detectFlowVersion.mockResolvedValue({
+      flowVersion: props.flowVersion,
+      useLatestFlowVersion: false,
+    })
+    await runFlowNode({
+      conversationId: "conv-1",
+      contactInboxId: "ci-1",
+      flowId: "flow-1",
+      nodeId: "node-1",
+      crmNavigation: correlation,
+    })
+    expect(sentNavigation()).toEqual({ ...correlation, updateMode: "send_new" })
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("промежуточный текст сохраняет pending до последней части", async () => {
+    const props = apiProps()
+    props.details.steps.push({ ...terminalStep, id: "last-text" })
+    await runStepsAndQuickReplies(props)
+    expect(sentNavigation()).toEqual(correlation)
+    expect(integrationQueueAdd).toHaveBeenCalledOnce()
+    chatQueueAdd.mockClear()
+    integrationQueueAdd.mockClear()
+    await runStepsAndQuickReplies({ ...props, startFromStepId: "last-text" })
+    expect(sentNavigation()).toEqual({ ...correlation, updateMode: "send_new" })
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    "node",
+    "state",
+  ])("plain перед Menu через %s не объявляет terminal", async (route) => {
+    const props = apiProps()
+    props.details.steps[0] = {
+      ...terminalStep,
+      states: [{ id: "ok", stateType: "success" }],
+    }
+    const menuNode = sendMessageNodeDefaultFn({
+      nodeProps: { id: "menu" },
+      detailProps: {
+        steps: [sendTextStepDefaultFn({ text: "Меню" })],
+        quickReplies: [makeQuickReply()],
+      },
+    })
+    menuNode.data.details.beforeStep.channel = "api"
+    props.flowVersion = makeFlowVersion(
+      [...props.flowVersion.nodes, menuNode],
+      [
+        {
+          id: "edge",
+          source: "node-1",
+          sourceHandle: route === "node" ? "node-1" : "ok",
+          target: "menu",
+          targetHandle: "input",
+        },
+      ],
+    )
+    await runStepsAndQuickReplies(props)
+    expect(sentNavigation()).toEqual(correlation)
+    expect(integrationQueueAdd).toHaveBeenCalledOnce()
+    chatQueueAdd.mockClear()
+    await runStepsAndQuickReplies({
+      ...props,
+      targetId: "menu",
+      targetNodeId: "menu",
+      details: menuNode.data.details,
+    })
+    expect(sentNavigation()).toEqual(correlation)
+    expect(
+      (
+        chatQueueAdd.mock.calls[0] as unknown as [
+          string,
+          { data: { quickReplies: unknown[] } },
+        ]
+      )[1].data.quickReplies,
+    ).toHaveLength(1)
+  })
+
+  test.each([
+    "no-source",
+    "other-channel",
+    "interactive",
+    "before-action",
+    "selected-other-channel",
+    "step-buttons",
+  ])("не выводит terminal для %s", async (kind) => {
+    const props = apiProps()
+    if (kind === "no-source") {
+      props.crmNavigation = undefined
+    }
+    if (kind === "other-channel") {
+      props.contactInbox.channel = "messenger"
+    }
+    if (kind === "interactive") {
+      props.details.quickReplies = [makeQuickReply()]
+    }
+    if (kind === "before-action") {
+      props.details.beforeStep = makeStep("addTag")
+    }
+    if (kind === "selected-other-channel") {
+      props.details.beforeStep.channel = "messenger"
+    }
+    if (kind === "step-buttons") {
+      props.details.steps[0] = { ...terminalStep, buttons: [makeQuickReply()] }
+    }
+    await runStepsAndQuickReplies(props)
+    expect(sentNavigation()).toEqual(
+      kind === "no-source" ? undefined : correlation,
+    )
+  })
+
+  test("явная presentation автора сохраняется", async () => {
+    const props = apiProps()
+    props.details.presentation = { updateMode: "edit_previous" }
+    await runStepsAndQuickReplies(props)
+    expect(sentNavigation()).toEqual({
+      ...correlation,
+      updateMode: "edit_previous",
+    })
+  })
+})
+
+test("native operator uses existing API worker path and preserves opaque output ports", async () => {
+  const node = createSupacrmOperatorNode({ nodeProps: { id: "node-1" } })
+  const props = {
+    ...makeBaseProps(makeFlowVersion([node])),
+    contactInbox: { id: "ci-1", contactId: "contact-1", channel: "api" },
+    crmNavigation: { sourceEventId: "operator-event" },
+    details: node.data.details,
+  }
+  chatQueueAdd.mockClear()
+  await runStepsAndQuickReplies(props)
+  expect(chatQueueAdd).toHaveBeenCalledOnce()
+  const sent = chatQueueAdd.mock.calls[0][1] as {
+    data: {
+      step: { text: string }
+      quickReplies: unknown[]
+      crmNavigation: unknown
+    }
+  }
+  expect(sent.data.step.text).toContain('"action":"operator.request"')
+  expect(sent.data.quickReplies).toHaveLength(2)
+  expect(sent.data.crmNavigation).toEqual({ sourceEventId: "operator-event" })
+})
+
+test("native data request uses existing API worker path and preserves opaque output ports", async () => {
+  const node = createSupacrmDataRequestNode({ nodeProps: { id: "node-1" } })
+  const props = {
+    ...makeBaseProps(makeFlowVersion([node])),
+    contactInbox: { id: "ci-1", contactId: "contact-1", channel: "api" },
+    crmNavigation: { sourceEventId: "input-event" },
+    details: node.data.details,
+  }
+  chatQueueAdd.mockClear()
+  await runStepsAndQuickReplies(props)
+  expect(chatQueueAdd).toHaveBeenCalledOnce()
+  const sent = chatQueueAdd.mock.calls[0][1] as {
+    data: {
+      step: { text: string }
+      quickReplies: unknown[]
+      crmNavigation: unknown
+    }
+  }
+  expect(sent.data.step.text).toContain('"action":"input.request"')
+  expect(sent.data.quickReplies).toHaveLength(3)
+  expect(sent.data.crmNavigation).toEqual({ sourceEventId: "input-event" })
+})
+
+test("native reminder uses existing API worker path and preserves opaque output ports", async () => {
+  const node = createSupacrmReminderNode({ nodeProps: { id: "node-1" } })
+  const props = {
+    ...makeBaseProps(makeFlowVersion([node])),
+    contactInbox: { id: "ci-1", contactId: "contact-1", channel: "api" },
+    crmNavigation: { sourceEventId: "reminder-event" },
+    details: node.data.details,
+  }
+  chatQueueAdd.mockClear()
+  await runStepsAndQuickReplies(props)
+  expect(chatQueueAdd).toHaveBeenCalledOnce()
+  const sent = chatQueueAdd.mock.calls[0][1] as {
+    data: {
+      step: { text: string }
+      quickReplies: unknown[]
+      crmNavigation: unknown
+    }
+  }
+  expect(sent.data.step.text).toContain('"action":"reminder.schedule"')
+  expect(sent.data.quickReplies).toHaveLength(2)
+  expect(sent.data.crmNavigation).toEqual({ sourceEventId: "reminder-event" })
+})
+
+test.skipIf(
+  !(
+    process.env.SUPACRM_LOCAL_PYTHON && process.env.SUPACRM_LOCAL_BRIDGE_SCRIPT
+  ),
+)(
+  "local flow reaches signed CRM bridge and persists all three block entries",
+  async () => {
+    const nodes = [
+      createSupacrmOperatorNode({}),
+      createSupacrmDataRequestNode({}),
+      createSupacrmReminderNode({}),
+    ]
+    for (const node of nodes) {
+      const props = {
+        ...makeBaseProps(makeFlowVersion([node])),
+        contactInbox: { id: "44", contactId: "1", channel: "api" },
+        crmNavigation: { sourceEventId: "local-proof-event" },
+        details: node.data.details,
+      }
+      chatQueueAdd.mockClear()
+      await runStepsAndQuickReplies(props)
+      const sent = chatQueueAdd.mock.calls[0][1] as {
+        data: {
+          step: { text: string }
+          quickReplies: { id: string; label: string }[]
+          crmNavigation: unknown
+        }
+      }
+      const message = {
+        text: sent.data.step.text,
+        contentAttributes: { crmNavigation: sent.data.crmNavigation },
+        quickReplies: sent.data.quickReplies.map((p) => ({
+          title: p.label,
+          buttonType: "postback",
+          postback: encodeButtonPayload({
+            flowId: "11",
+            flowVersionId: "22",
+            buttonId: p.id,
+            contactInboxId: "44",
+          }),
+        })),
+      }
+      const raw = JSON.stringify({
+        operationId: "local-proof-operation",
+        event: "message_created",
+        contact: { sourceId: "supacrm:b:12" },
+        message,
+      })
+      const timestamp = Math.floor(Date.now() / 1000).toString()
+      const signature = `sha256=${await signApiPayload("local-test-only", timestamp, raw)}`
+      const output = execFileSync(
+        process.env.SUPACRM_LOCAL_PYTHON as string,
+        [process.env.SUPACRM_LOCAL_BRIDGE_SCRIPT as string],
+        {
+          input: JSON.stringify({ raw, timestamp, signature }),
+          env: {
+            ...process.env,
+            PYTHONPATH: process.env.SUPACRM_LOCAL_BACKEND,
+          },
+          encoding: "utf8",
+        },
+      )
+      const result = JSON.parse(output)
+      expect(result.hmac).toBe("verified")
+      expect(result.crm).toBe("persisted")
+      expect(result.external_sends).toBe(0)
+      process.stdout.write(`${JSON.stringify(result)}\n`)
+    }
+  },
+)

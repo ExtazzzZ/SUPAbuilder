@@ -6,6 +6,7 @@ import { listIntegrationOpenaiCompatible } from "@/features/integration-openai-c
 import { withWorkspaceIdAndIdSchema } from "@/features/workspaces/schema/resource"
 import { requireWorkspacePermission } from "@/lib/auth/require-workspace-permission"
 import { isNotFoundException } from "@/lib/errors/validation-exception"
+import { resolveNativeSourceDocument } from "@/lib/source-authoring-native/server"
 
 type FlowPageProps = {
   params: Promise<{ workspaceId: string; id: string }>
@@ -30,6 +31,47 @@ export default async function FlowPage({ params }: FlowPageProps) {
       return notFound()
     }
     throw error
+  }
+
+  const document = await resolveNativeSourceDocument({
+    workspaceId: data.workspaceId,
+    flowId: data.id,
+  })
+  if (document.kind === "blocked") {
+    return notFound()
+  }
+  if (document.kind === "source") {
+    const {
+      id,
+      workspaceId,
+      name,
+      active,
+      enableInInbox,
+      currentVersionId,
+      draftVersionId,
+      folderId,
+      createdAt,
+      updatedAt,
+    } = flow
+    return (
+      <div className="flex h-screen w-screen flex-col">
+        <FlowDetail
+          flow={{
+            id,
+            workspaceId,
+            name,
+            active,
+            enableInInbox,
+            currentVersionId,
+            draftVersionId,
+            folderId,
+            createdAt,
+            updatedAt,
+          }}
+          sourceBinding={document}
+        />
+      </div>
+    )
   }
 
   const draftFlowVersion = flow.flowVersions?.find((v) => v.isDraft)

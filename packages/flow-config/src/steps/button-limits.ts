@@ -5,3 +5,6 @@
  * the whole flow schema graph.
  */
 export const BUTTON_LABEL_MAX = 20
+
+/** Максимум API-моста; ограничения остальных каналов проверяются при публикации. */
+export const BUTTON_LABEL_SCHEMA_MAX = 80

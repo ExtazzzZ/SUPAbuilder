@@ -19,5 +19,6 @@ export const publishFlowAction = workspaceActionClient
       flowId: id,
       nodes: parsedInput.nodes,
       edges: parsedInput.edges,
+      expectedTemplateBase: parsedInput.expectedTemplateBase,
     })
   })

@@ -2,6 +2,16 @@ import { and, type DatabaseClient, db, eq, isNull, sql } from "../../client"
 import { conversationModel } from "../../schema"
 import type { ConversationModel } from "../../types"
 
+/** Точная conversation внутри workspace; contactId не является её ключом. */
+export function findConversationById(
+  params: { conversationId: string; workspaceId: string },
+  tx: DatabaseClient = db,
+): Promise<ConversationModel | undefined> {
+  return tx.query.conversationModel.findFirst({
+    where: { id: params.conversationId, workspaceId: params.workspaceId },
+  })
+}
+
 /**
  * Claims an unassigned conversation for a user — used by the call-answer and
  * outbound-dial auto-assign flows. The `IS NULL` guards on both `assignedUserId`

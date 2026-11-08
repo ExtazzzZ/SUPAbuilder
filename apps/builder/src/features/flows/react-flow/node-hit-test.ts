@@ -15,16 +15,19 @@ type GetIntersectingNodes = (
  * tracked for flow nodes today, so this prefers the highest `zIndex` and
  * falls back to the most recently added node as the best available proxy
  * for "visually on top".
+ * Editor-only collapsed members remain in React Flow's canonical store;
+ * `hiddenNodeIds` excludes their old rectangles from interactive hit testing.
  */
 export function findNodeAtPoint(
   getIntersectingNodes: GetIntersectingNodes,
   point: XYPosition,
   excludeNodeId: string,
+  hiddenNodeIds?: ReadonlySet<string>,
 ): Node | undefined {
   const candidates = getIntersectingNodes(
     { x: point.x, y: point.y, width: 1, height: 1 },
     false,
-  ).filter((node) => node.id !== excludeNodeId)
+  ).filter((node) => node.id !== excludeNodeId && !hiddenNodeIds?.has(node.id))
 
   return candidates.reduce<Node | undefined>((topmost, candidate) => {
     if (!topmost) {

@@ -19,6 +19,7 @@ import {
   listForConversation,
   withResolvedAttachmentUrls,
 } from "./list-for-conversation"
+import { resolveApiStatusOwner } from "./resolve-api-status-owner"
 
 type FindByProps = {
   conversationId: string
@@ -27,6 +28,7 @@ type FindByProps = {
 }
 
 class MessageService extends BaseService {
+  resolveApiStatusOwner = resolveApiStatusOwner
   createOutgoing = createOutgoing
   listForConversation = listForConversation
   findForContact = findForContact

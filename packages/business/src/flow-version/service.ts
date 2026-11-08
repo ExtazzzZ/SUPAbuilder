@@ -8,17 +8,44 @@ import {
 } from "@chatbotx.io/database/client"
 import { flowModel, flowVersionModel } from "@chatbotx.io/database/schema"
 import type { FlowVersionModel } from "@chatbotx.io/database/types"
-import { normalizeFlowGraphDecisionMappings } from "@chatbotx.io/flow-config"
+import {
+  assertDraftWrappers,
+  getReceiptEmailTemplateBase,
+  normalizeFlowGraphDecisionMappings,
+  type ReceiptEmailTemplateBase,
+  receiptEmailContentKey,
+} from "@chatbotx.io/flow-config"
 import { withCache } from "@chatbotx.io/redis"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { conversationService } from "../conversation/service"
 import { decisionProfileService } from "../decision/profile-service"
-import { notFoundException } from "../errors"
+import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
 import { messengerWelcomeMessageFlowService } from "../messenger-welcome-message-flow/service"
 import { smartDelayService } from "../smart-delay/service"
+import { supacrmSourceBindingService } from "../supacrm-source-binding/service"
 import { assertFlowGraphPublishable } from "./assert-publishable"
+
+function assertTemplateWriteBase(
+  current: readonly unknown[],
+  incoming: readonly unknown[],
+  expected: ReceiptEmailTemplateBase | undefined,
+): void {
+  const base = getReceiptEmailTemplateBase(current)
+  if (!(base.length || getReceiptEmailTemplateBase(incoming).length)) {
+    return
+  }
+  if (
+    expected === undefined ||
+    receiptEmailContentKey(base) !== receiptEmailContentKey(expected)
+  ) {
+    throw validationException(
+      "expectedTemplateBase",
+      "Общие настройки изменились. Запись отклонена; обновите сценарий перед сохранением.",
+    )
+  }
+}
 
 class FlowVersionService extends BaseService {
   async findDraft(
@@ -164,42 +191,65 @@ class FlowVersionService extends BaseService {
   async restore({ version }: { version: FlowVersionModel }): Promise<void> {
     assertFlowGraphPublishable({ nodes: version.nodes, edges: version.edges })
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(flowVersionModel)
-        .set({ isLatest: false })
-        .where(
-          and(
-            eq(flowVersionModel.flowId, version.flowId),
-            eq(flowVersionModel.isLatest, true),
-          ),
-        )
-
-      await tx
-        .update(flowVersionModel)
-        .set({ isLatest: true })
-        .where(eq(flowVersionModel.id, version.id))
-
-      await tx
-        .update(flowModel)
-        .set({ currentVersionId: version.id })
-        .where(eq(flowModel.id, version.flowId))
-
-      // Update draft version
-      await tx
-        .update(flowVersionModel)
-        .set({
+    await supacrmSourceBindingService.withLegacyFlow(
+      {
+        workspaceId: version.workspaceId,
+        flowId: version.flowId,
+        operation: "restore",
+      },
+      async (tx) => {
+        const fresh = await tx.query.flowVersionModel.findFirst({
+          where: {
+            id: version.id,
+            flowId: version.flowId,
+            workspaceId: version.workspaceId,
+            isDraft: false,
+          },
+        })
+        if (!fresh) {
+          throw notFoundException("Flow version not found")
+        }
+        version = fresh
+        assertFlowGraphPublishable({
           nodes: version.nodes,
           edges: version.edges,
-          startNodeId: version.startNodeId,
         })
-        .where(
-          and(
-            eq(flowVersionModel.flowId, version.flowId),
-            eq(flowVersionModel.isDraft, true),
-          ),
-        )
-    })
+        await tx
+          .update(flowVersionModel)
+          .set({ isLatest: false })
+          .where(
+            and(
+              eq(flowVersionModel.flowId, version.flowId),
+              eq(flowVersionModel.isLatest, true),
+            ),
+          )
+
+        await tx
+          .update(flowVersionModel)
+          .set({ isLatest: true })
+          .where(eq(flowVersionModel.id, version.id))
+
+        await tx
+          .update(flowModel)
+          .set({ currentVersionId: version.id })
+          .where(eq(flowModel.id, version.flowId))
+
+        // Update draft version
+        await tx
+          .update(flowVersionModel)
+          .set({
+            nodes: version.nodes,
+            edges: version.edges,
+            startNodeId: version.startNodeId,
+          })
+          .where(
+            and(
+              eq(flowVersionModel.flowId, version.flowId),
+              eq(flowVersionModel.isDraft, true),
+            ),
+          )
+      },
+    )
 
     await this.invalidateCacheTags(`flows:${version.flowId}:versions`)
 
@@ -219,38 +269,43 @@ class FlowVersionService extends BaseService {
     flowId: string
     workspaceId: string
   }): Promise<Pick<FlowVersionModel, "nodes" | "edges">> {
-    const publishedVersion = await db.query.flowVersionModel.findFirst({
-      where: {
-        flowId,
-        workspaceId,
-        isDraft: false,
-        isLatest: true,
+    return await supacrmSourceBindingService.withLegacyFlow(
+      { workspaceId, flowId, operation: "revert" },
+      async (tx) => {
+        const publishedVersion = await tx.query.flowVersionModel.findFirst({
+          where: {
+            flowId,
+            workspaceId,
+            isDraft: false,
+            isLatest: true,
+          },
+        })
+
+        if (!publishedVersion) {
+          throw notFoundException("Flow version not found")
+        }
+
+        await tx
+          .update(flowVersionModel)
+          .set({
+            nodes: publishedVersion.nodes,
+            edges: publishedVersion.edges,
+            startNodeId: publishedVersion.startNodeId,
+          })
+          .where(
+            and(
+              eq(flowVersionModel.flowId, flowId),
+              eq(flowVersionModel.workspaceId, workspaceId),
+              eq(flowVersionModel.isDraft, true),
+            ),
+          )
+
+        return {
+          nodes: publishedVersion.nodes,
+          edges: publishedVersion.edges,
+        }
       },
-    })
-
-    if (!publishedVersion) {
-      throw notFoundException("Flow version not found")
-    }
-
-    await db
-      .update(flowVersionModel)
-      .set({
-        nodes: publishedVersion.nodes,
-        edges: publishedVersion.edges,
-        startNodeId: publishedVersion.startNodeId,
-      })
-      .where(
-        and(
-          eq(flowVersionModel.flowId, flowId),
-          eq(flowVersionModel.workspaceId, workspaceId),
-          eq(flowVersionModel.isDraft, true),
-        ),
-      )
-
-    return {
-      nodes: publishedVersion.nodes,
-      edges: publishedVersion.edges,
-    }
+    )
   }
 
   /**
@@ -354,7 +409,9 @@ class FlowVersionService extends BaseService {
     id: string
     nodes: FlowVersionModel["nodes"]
     edges: FlowVersionModel["edges"]
+    expectedTemplateBase?: ReceiptEmailTemplateBase
   }): Promise<void> {
+    assertDraftWrappers(input.nodes)
     const nodes = normalizeFlowGraphDecisionMappings(input.nodes)
     const flowVersion = await db.query.flowVersionModel.findFirst({
       where: {
@@ -368,13 +425,34 @@ class FlowVersionService extends BaseService {
       throw notFoundException("Draft flow version not found")
     }
 
-    await db
-      .update(flowVersionModel)
-      .set({
-        nodes,
-        edges: input.edges,
-      })
-      .where(eq(flowVersionModel.id, flowVersion.id))
+    await supacrmSourceBindingService.withLegacyFlow(
+      {
+        workspaceId: input.workspaceId,
+        flowId: flowVersion.flowId,
+        operation: "updateDraft",
+      },
+      async (tx) => {
+        const fresh = await tx.query.flowVersionModel.findFirst({
+          where: {
+            id: input.id,
+            workspaceId: input.workspaceId,
+            flowId: flowVersion.flowId,
+            isDraft: true,
+          },
+        })
+        if (!fresh) {
+          throw notFoundException("Draft flow version not found")
+        }
+        assertTemplateWriteBase(fresh.nodes, nodes, input.expectedTemplateBase)
+        await tx
+          .update(flowVersionModel)
+          .set({
+            nodes,
+            edges: input.edges,
+          })
+          .where(eq(flowVersionModel.id, flowVersion.id))
+      },
+    )
   }
 
   /**
@@ -387,24 +465,43 @@ class FlowVersionService extends BaseService {
     flowId: string
     nodes: FlowVersionModel["nodes"]
     edges: FlowVersionModel["edges"]
+    expectedTemplateBase?: ReceiptEmailTemplateBase
   }): Promise<void> {
+    assertDraftWrappers(input.nodes)
     const nodes = normalizeFlowGraphDecisionMappings(input.nodes)
-    const draftVersion = await this.findDraft({
-      flowId: input.flowId,
-      workspaceId: input.workspaceId,
-    })
+    await supacrmSourceBindingService.withLegacyFlow(
+      {
+        workspaceId: input.workspaceId,
+        flowId: input.flowId,
+        operation: "updateDraft",
+      },
+      async (tx) => {
+        const draftVersion = await this.findDraft(
+          {
+            flowId: input.flowId,
+            workspaceId: input.workspaceId,
+          },
+          tx,
+        )
 
-    if (!draftVersion) {
-      throw notFoundException("Draft flow version not found")
-    }
+        if (!draftVersion) {
+          throw notFoundException("Draft flow version not found")
+        }
+        assertTemplateWriteBase(
+          draftVersion.nodes,
+          nodes,
+          input.expectedTemplateBase,
+        )
 
-    await db
-      .update(flowVersionModel)
-      .set({
-        nodes,
-        edges: input.edges,
-      })
-      .where(eq(flowVersionModel.id, draftVersion.id))
+        await tx
+          .update(flowVersionModel)
+          .set({
+            nodes,
+            edges: input.edges,
+          })
+          .where(eq(flowVersionModel.id, draftVersion.id))
+      },
+    )
   }
 
   async invalidateList(flowId: string): Promise<void> {
@@ -440,7 +537,9 @@ class FlowVersionService extends BaseService {
     flowId: string
     nodes: FlowVersionModel["nodes"]
     edges: FlowVersionModel["edges"]
+    expectedTemplateBase?: ReceiptEmailTemplateBase
   }): Promise<void> {
+    assertDraftWrappers(input.nodes)
     const nodes = normalizeFlowGraphDecisionMappings(input.nodes)
     assertFlowGraphPublishable({ nodes, edges: input.edges })
     await decisionProfileService.assertFlowReferencesPublishable({
@@ -448,67 +547,68 @@ class FlowVersionService extends BaseService {
       workspaceId: input.workspaceId,
     })
 
-    const flow = await db.query.flowModel.findFirst({
-      where: {
-        id: input.flowId,
-        workspaceId: input.workspaceId,
-      },
-      with: {
-        flowVersions: {
-          where: {
-            isDraft: true,
-          },
-        },
-      },
-    })
-
-    if (!flow || flow.flowVersions.length === 0) {
-      throw notFoundException("Flow not found")
-    }
-
-    const draftVersion = flow.flowVersions[0]
-
     const newVersionId = createId()
-    await db.transaction(async (tx) => {
-      // Remove all other latest versions
-      await tx
-        .update(flowVersionModel)
-        .set({
-          isLatest: false,
+    const flow = await supacrmSourceBindingService.withLegacyFlow(
+      {
+        workspaceId: input.workspaceId,
+        flowId: input.flowId,
+        operation: "publish",
+      },
+      async (tx) => {
+        const flow = await tx.query.flowModel.findFirst({
+          where: { id: input.flowId, workspaceId: input.workspaceId },
+          with: { flowVersions: { where: { isDraft: true } } },
         })
-        .where(
-          and(
-            eq(flowVersionModel.flowId, flow.id),
-            eq(flowVersionModel.isLatest, true),
-          ),
+        if (flow?.flowVersions.length !== 1) {
+          throw notFoundException("Flow not found")
+        }
+        const draftVersion = flow.flowVersions[0]
+        assertTemplateWriteBase(
+          draftVersion.nodes,
+          nodes,
+          input.expectedTemplateBase,
         )
+        // Remove all other latest versions
+        await tx
+          .update(flowVersionModel)
+          .set({
+            isLatest: false,
+          })
+          .where(
+            and(
+              eq(flowVersionModel.flowId, flow.id),
+              eq(flowVersionModel.isLatest, true),
+            ),
+          )
 
-      await tx
-        .update(flowVersionModel)
-        .set({
+        await tx
+          .update(flowVersionModel)
+          .set({
+            nodes,
+            edges: input.edges,
+          })
+          .where(eq(flowVersionModel.id, draftVersion.id))
+
+        await tx.insert(flowVersionModel).values({
+          id: newVersionId,
+          workspaceId: flow.workspaceId,
+          flowId: flow.id,
+          isDraft: false,
+          isLatest: true,
           nodes,
           edges: input.edges,
+          startNodeId: draftVersion.startNodeId,
         })
-        .where(eq(flowVersionModel.id, draftVersion.id))
 
-      await tx.insert(flowVersionModel).values({
-        id: newVersionId,
-        workspaceId: flow.workspaceId,
-        flowId: flow.id,
-        isDraft: false,
-        isLatest: true,
-        nodes,
-        edges: input.edges,
-        startNodeId: draftVersion.startNodeId,
-      })
-
-      await tx
-        .update(flowModel)
-        .set({
-          currentVersionId: newVersionId,
-        })
-        .where(eq(flowModel.id, flow.id))
-    })
+        await tx
+          .update(flowModel)
+          .set({
+            currentVersionId: newVersionId,
+          })
+          .where(eq(flowModel.id, flow.id))
+        return flow
+      },
+    )
 
     await this.invalidateCacheTags(`flows:${flow.id}:versions`)
 

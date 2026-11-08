@@ -57,7 +57,13 @@ export const shouldShowDefaultContinue = (
   type: NodeType,
   data: FlowNode["data"],
 ) => {
-  if (disabledContinueNodeTypes.includes(type)) {
+  if (
+    ("supacrmFulfillment" in data.details && data.details.supacrmFulfillment) ||
+    ("supacrmOperator" in data.details && data.details.supacrmOperator) ||
+    ("supacrmDataRequest" in data.details && data.details.supacrmDataRequest) ||
+    ("supacrmReminder" in data.details && data.details.supacrmReminder) ||
+    disabledContinueNodeTypes.includes(type)
+  ) {
     return false
   }
 

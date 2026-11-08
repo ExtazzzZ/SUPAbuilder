@@ -1,8 +1,11 @@
 import {
+  type ButtonStepProps,
   buttonStepDefaultFn,
   CHANNEL_FLOW_POLICIES,
   getChannelFlowPolicy,
+  groupButtonRows,
   resolveSendTextLengthLimits,
+  setButtonRowPlacement,
 } from "@chatbotx.io/flow-config"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import {
@@ -25,7 +28,7 @@ type ButtonStepEditorProps = {
 export const ButtonStepEditor = (props: ButtonStepEditorProps) => {
   const { parentName, editorConfig, ...rest } = props
 
-  const { getValues } = useFormContext()
+  const { getValues, setValue } = useFormContext()
   const {
     setButtonPath,
     setButtonInitialData,
@@ -38,6 +41,21 @@ export const ButtonStepEditor = (props: ButtonStepEditorProps) => {
   // counter would otherwise keep showing the length from before that edit.
   const label = useWatch({ name: `${parentName}.label` })
   const channel = useWatch({ name: "beforeStep.channel" })
+  const t = useTranslations()
+  const groupPath = parentName.slice(0, parentName.lastIndexOf("."))
+  const index = Number(parentName.slice(parentName.lastIndexOf(".") + 1))
+  const watchedButtons = useWatch({ name: groupPath })
+  const buttons: ButtonStepProps[] = Array.isArray(watchedButtons)
+    ? watchedButtons
+    : []
+  const rows = groupButtonRows(buttons)
+  const ownRow =
+    rows.find((row) => row.some((button) => button === buttons[index])) ?? []
+  const current = buttons[index]
+  const joined = current ? ownRow.indexOf(current) > 0 : false
+  const previousRow = rows[rows.indexOf(ownRow) - 1]
+  const canJoin = index > 0 && (joined || previousRow?.length === 1)
+  const supportsRows = channel === "api" || channel === "omnichannel"
 
   const limits = resolveSendTextLengthLimits({ channel })
   const labelMax = parentName.startsWith("quickReplies")
@@ -45,7 +63,7 @@ export const ButtonStepEditor = (props: ButtonStepEditorProps) => {
     : limits.buttonLabel
 
   return (
-    <div className="w-full flex-1" {...rest}>
+    <div className="w-full min-w-0 flex-1" {...rest}>
       <Button
         className="w-full justify-between gap-2 hover:text-blue-500"
         onClick={() => {
@@ -60,6 +78,30 @@ export const ButtonStepEditor = (props: ButtonStepEditorProps) => {
         <span className="truncate">{label}</span>
         <CharacterCounter max={labelMax} value={label} />
       </Button>
+      {supportsRows && index > 0 && (
+        <Button
+          aria-label={t("flows.buttons.placement", { label })}
+          aria-pressed={joined}
+          className="h-auto max-w-full whitespace-normal px-1 py-1 text-xs"
+          disabled={!canJoin}
+          onClick={() => {
+            setValue(
+              groupPath,
+              setButtonRowPlacement(buttons, index, !joined),
+              {
+                shouldDirty: true,
+                shouldValidate: true,
+              },
+            )
+          }}
+          type="button"
+          variant="ghost"
+        >
+          {joined
+            ? t("flows.buttons.fullRow")
+            : t("flows.buttons.joinPrevious")}
+        </Button>
+      )}
     </div>
   )
 }
@@ -77,6 +119,7 @@ export const ButtonGroupEditor = (props: ButtonGroupEditorProps) => {
     name: parentName,
   })
   const channel = useWatch({ name: "beforeStep.channel" })
+  const buttons: ButtonStepProps[] = useWatch({ name: parentName }) ?? []
 
   const maxButtons =
     getChannelFlowPolicy(channel)?.limits.buttonCount ??
@@ -97,12 +140,15 @@ export const ButtonGroupEditor = (props: ButtonGroupEditorProps) => {
         onMove={({ activeIndex, overIndex }) => move(activeIndex, overIndex)}
         value={fields}
       >
-        <div className="flex w-full flex-col gap-2">
+        <div className="grid w-full grid-cols-6 gap-2">
           {fields.map((field, index) => (
             <SortableItem
               key={field.id}
               render={
-                <div className="flex w-full items-center gap-1">
+                <div
+                  className="flex w-full items-center gap-1"
+                  style={buttonGridStyle(buttons, index)}
+                >
                   <ButtonStepEditor parentName={`${parentName}.${index}`} />
                   <SortableItemHandle
                     render={
@@ -136,4 +182,14 @@ export const ButtonGroupEditor = (props: ButtonGroupEditorProps) => {
       ) : null}
     </>
   )
+}
+
+/** Сетка делит строку поровну и сохраняет импортированные ряды из трёх кнопок. */
+export const buttonGridStyle = (buttons: ButtonStepProps[], index: number) => {
+  const row = groupButtonRows(buttons).find((items) =>
+    items.some((button) => button === buttons[index]),
+  )
+  return {
+    gridColumn: `span ${Math.max(1, Math.floor(6 / (row?.length ?? 1)))}`,
+  }
 }

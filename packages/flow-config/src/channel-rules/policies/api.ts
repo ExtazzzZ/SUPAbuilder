@@ -5,7 +5,7 @@ import { defineChannelFlowPolicy } from "./define"
 export const apiFlowPolicy = defineChannelFlowPolicy({
   limits: {
     buttonCount: 3,
-    buttonLabel: 20,
+    buttonLabel: 80,
     text: 6000,
   },
   supported: [
@@ -19,9 +19,8 @@ export const apiFlowPolicy = defineChannelFlowPolicy({
     stepTypes.enum.sendFile,
     stepTypes.enum.sendQuickReply,
   ],
-  // The API attachment transport has no button payload; text keeps buttons.
+  // API-мост сохраняет кнопки текста и одиночного изображения.
   noButtons: [
-    stepTypes.enum.sendImage,
     stepTypes.enum.sendVideo,
     stepTypes.enum.sendAudio,
     stepTypes.enum.sendFile,

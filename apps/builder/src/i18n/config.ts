@@ -15,6 +15,7 @@ export const locales = [
   "pt-BR",
   "pt-PT",
   "ro",
+  "ru",
   "sv",
   "tr",
   "vi",
@@ -23,7 +24,7 @@ export const locales = [
 ] as const
 
 export type Locale = (typeof locales)[number]
-export const defaultLocale: Locale = "en"
+export const defaultLocale: Locale = "ru"
 
 export const localeMeta: Record<
   Locale,
@@ -45,6 +46,7 @@ export const localeMeta: Record<
   "pt-BR": { nativeLabel: "Português (Brasil)", dir: "ltr" },
   "pt-PT": { nativeLabel: "Português (Portugal)", dir: "ltr" },
   ro: { nativeLabel: "Română", dir: "ltr" },
+  ru: { nativeLabel: "Русский", dir: "ltr" },
   sv: { nativeLabel: "Svenska", dir: "ltr" },
   tr: { nativeLabel: "Türkçe", dir: "ltr" },
   vi: { nativeLabel: "Tiếng Việt", dir: "ltr" },

@@ -1,4 +1,8 @@
-import { type ButtonStepProps, buttonTypes } from "@chatbotx.io/flow-config"
+import {
+  type ButtonStepProps,
+  buttonTypes,
+  groupButtonRows,
+} from "@chatbotx.io/flow-config"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import { Position } from "@xyflow/react"
@@ -60,8 +64,14 @@ export const ButtonGroupViewer = (props: ButtonGroupViewerProps) => {
 
   return (
     <div className="flex flex-1 flex-col gap-2 bg-gray-100 px-3 py-2 dark:bg-neutral-700">
-      {data.map((button) => (
-        <ButtonStepViewer data={button} key={button.id} />
+      {groupButtonRows(data).map((row) => (
+        <div className="flex gap-2" data-slot="button-row" key={row[0]?.id}>
+          {row.map((button) => (
+            <div className="min-w-0 flex-1" key={button.id}>
+              <ButtonStepViewer data={button} />
+            </div>
+          ))}
+        </div>
       ))}
     </div>
   )

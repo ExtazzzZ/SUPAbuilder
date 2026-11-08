@@ -2,9 +2,18 @@ import {
   edgeSchema,
   flowSpecSchema,
   publishFlowSchema as publishFlowGraphSchema,
+  receiptEmailTemplateBaseSchema,
+  refineDraftWrappers,
+  refineFlowEditorSections,
 } from "@chatbotx.io/flow-config"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
+
+const expectedTemplateBase = receiptEmailTemplateBaseSchema
+  .optional()
+  .describe(
+    "Copy draftTemplateBase from flows.get as the acknowledged draft base. Required if the current or incoming graph contains an Email template binding; omission or a stale base rejects the write without overwriting changes.",
+  )
 
 export const createFlowSchema = z.object({
   folderId: zodBigintAsString()
@@ -60,7 +69,9 @@ export const createFlowRequest = createFlowSchema
         "Flow-spec DSL document compiled server-side into the draft's nodes/edges (see `GET /v1/schemas/flow-spec`). Mutually exclusive with `nodes`/`edges`.",
       ),
     nodes: z
-      .optional(z.array(authorableNodeSchema).min(1))
+      .optional(
+        z.array(authorableNodeSchema).min(1).superRefine(refineDraftWrappers),
+      )
       .describe(
         "Raw node graph. `position`/`measured` are optional — omitted positions are laid out automatically — and each node's `id` is a request-scoped token for wiring `edges`, remapped to a real persisted id server-side. Mutually exclusive with `spec`.",
       ),
@@ -151,24 +162,42 @@ export const updateDraftFlowVersionSchema = rejectIfKeysPresent(
   z.object({
     nodes: z
       .array(z.any())
+      .superRefine(refineDraftWrappers)
+      .superRefine(refineFlowEditorSections)
       .describe("Raw flow node graph, as sent by the builder UI."),
     edges: z
       .array(edgeSchema)
       .describe("Raw flow edge graph, as sent by the builder UI."),
+    expectedTemplateBase,
   }),
 )
 export type UpdateDraftFlowVersionSchema = z.infer<
   typeof updateDraftFlowVersionSchema
 >
 
-/** `{ spec }` input, accepted by `flows.publish`/`flows.updateDraft` alongside the raw `{ nodes, edges }` shape, and the sole input of `flows.validate`. */
+/** `{ spec }` input, accepted by `flows.publish`/`flows.updateDraft` alongside the raw `{ nodes, edges }` shape, and by `flows.validate`. */
 export const flowSpecRequest = rejectIfKeysPresent(
   ["nodes", "edges"],
   '"spec"',
   z.object({
     spec: flowSpecSchema,
+    expectedTemplateBase,
   }),
 )
+
+/** Validation accepts a legacy spec or a full native graph using the publish owner schema. */
+export const validateFlowRequest = z.union([
+  rejectIfKeysPresent(["graph"], '"spec"', flowSpecRequest),
+  rejectIfKeysPresent(
+    ["spec", "nodes", "edges"],
+    '"graph"',
+    z.object({
+      graph: publishFlowGraphSchema.describe(
+        "Full native { nodes, edges } graph, with the same node settings, required core fields and output ports as flows.publish. Validation never persists the graph.",
+      ),
+    }),
+  ),
+])
 
 // `flowSpecRequest` is listed first so a body that happens to satisfy both
 // shapes resolves to the spec branch; the `rejectIfKeysPresent` guards on
@@ -187,7 +216,7 @@ export const updateDraftFlowRequest = z.union([
 export const publishFlowSchema = rejectIfKeysPresent(
   ["spec"],
   '"nodes"/"edges"',
-  publishFlowGraphSchema,
+  publishFlowGraphSchema.and(z.object({ expectedTemplateBase })),
 )
 export type PublishFlowSchema = z.infer<typeof publishFlowSchema>
 

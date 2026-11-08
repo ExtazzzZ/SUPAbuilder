@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text } from "drizzle-orm/pg-core"
+import { boolean, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core"
 import { bigintAsString, sharedColumns } from "../partials/shared"
 import { folderModel } from "./folder"
 import { workspaceModel } from "./workspace"
@@ -23,5 +23,8 @@ export const flowModel = pgTable(
       onUpdate: "cascade",
     }),
   },
-  (table) => [index("Flow_workspaceId_idx").on(table.workspaceId)],
+  (table) => [
+    index("Flow_workspaceId_idx").on(table.workspaceId),
+    uniqueIndex("Flow_id_workspaceId_key").on(table.id, table.workspaceId),
+  ],
 )

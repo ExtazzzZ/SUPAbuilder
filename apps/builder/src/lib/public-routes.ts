@@ -59,6 +59,10 @@ export const PUBLIC_ROUTES = [
  * so the list is pinned by a test.
  */
 export function isPublicRoute(pathname: string) {
+  // Публична только оболочка; management запросы выполняет доверенный CRM parent.
+  if (pathname === "/supacrm/source-editor") {
+    return true
+  }
   for (const route of PUBLIC_ROUTES) {
     const base = route.endsWith("/") ? route.slice(0, -1) : route
     if (pathname === base || pathname.startsWith(`${base}/`)) {

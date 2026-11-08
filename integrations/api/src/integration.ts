@@ -14,6 +14,8 @@ import type { ApiActions, ApiAuthValue } from "./schema"
 
 const config: IntegrationDefinition<BaseConfig, ApiAuthValue, ApiActions> = {
   name: "api",
+  // Callback подтверждает приём в очередь; доставку подтверждает отдельный статус.
+  deliveryReceipts: true,
   channels: {
     channel: {
       message: messageHandlers,

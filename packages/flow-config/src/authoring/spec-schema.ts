@@ -2,7 +2,7 @@ import { zodBigintAsString, zodBigintIdAsString } from "@chatbotx.io/utils"
 import { channelTypes } from "@chatbotx.io/utils/channel"
 import { z } from "zod"
 import { countMessageCharacters } from "../channel-rules/characters"
-import { BUTTON_LABEL_MAX } from "../steps/button"
+import { BUTTON_LABEL_SCHEMA_MAX } from "../steps/button"
 import {
   PIPELINE_STEP_LIMITS,
   pipelineActionCanSkip,
@@ -146,12 +146,12 @@ const sendButtonSpecSchema: z.ZodType<{
         .trim()
         .min(1)
         .refine(
-          (value) => countMessageCharacters(value) <= BUTTON_LABEL_MAX,
+          (value) => countMessageCharacters(value) <= BUTTON_LABEL_SCHEMA_MAX,
           flowValidationCodes.constraintExceeded,
         )
         .meta({
-          description: `Button label shown to the contact (max ${BUTTON_LABEL_MAX} characters).`,
-          maxLength: BUTTON_LABEL_MAX,
+          description: `Button label shown to the contact (max ${BUTTON_LABEL_SCHEMA_MAX} characters).`,
+          maxLength: BUTTON_LABEL_SCHEMA_MAX,
         }),
       // DSL vocabulary ("steps to run then"), not an accidental thenable — the
       // value is an array, never callable, so nothing ever treats this object

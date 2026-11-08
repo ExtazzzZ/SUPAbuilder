@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { resolveWorkspaceAccess } from "../src/workspace-support-access/resolve-access"
 
 const mocks = vi.hoisted(() => ({
@@ -22,12 +22,48 @@ vi.mock("../src/workspace-member/service", () => ({
 
 const user = { id: "user-1", email: "admin@chatbotx.io" }
 
+afterEach(() => vi.unstubAllEnvs())
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.isSupportConsentRequired.mockResolvedValue(true)
 })
 
 describe("resolveWorkspaceAccess", () => {
+  test.each([
+    "11759896832695848",
+    "999",
+  ])("SUPAlogin restricts existing membership to the shared workspace: %s", async (workspaceId) => {
+    vi.stubEnv("SUPALOGIN_ISSUER", "https://login.example.test")
+    vi.stubEnv("SUPABUILDER_WORKSPACE_ID", "11759896832695848")
+    const realMember = {
+      userId: user.id,
+      permissions: { superAdmin: true } as never,
+      workspace: { id: workspaceId, supportAccessUntil: null } as never,
+    }
+    const result = await resolveWorkspaceAccess({
+      realMember,
+      workspaceId,
+      user,
+    })
+    expect(Boolean(result)).toBe(workspaceId === "11759896832695848")
+  })
+
+  test("SUPAlogin prevents platform support from entering another workspace", async () => {
+    vi.stubEnv("SUPALOGIN_ISSUER", "https://login.example.test")
+    vi.stubEnv("SUPABUILDER_WORKSPACE_ID", "11759896832695848")
+    mocks.isSuperAdmin.mockResolvedValue(true)
+    mocks.isSupportConsentRequired.mockResolvedValue(false)
+    mocks.findForAuth.mockResolvedValue({ id: "999", supportAccessUntil: null })
+    expect(
+      await resolveWorkspaceAccess({
+        realMember: undefined,
+        workspaceId: "999",
+        user,
+      }),
+    ).toBeUndefined()
+  })
+
   test("uses the real member's attached workspace without calling workspaceService.findForAuth", async () => {
     const realMember = {
       userId: "user-1",

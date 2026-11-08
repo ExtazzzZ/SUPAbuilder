@@ -5,6 +5,11 @@ import type { Edge, Node } from "@xyflow/react"
 import { useCallback, useState } from "react"
 import type { FlowVersionResource } from "@/features/flow-versions/schema/resource"
 import type { FlowResource } from "../schema/resource"
+import { ReceiptEmailTemplateDraftProvider } from "../supacrm-form/template-draft-context"
+import {
+  NativeSourceFlowFrame,
+  type NativeSourceFlowFrameProps,
+} from "../supacrm-source/native/source-frame"
 import { ButtonEditorDialog } from "./button-editor-dialog"
 import { FrameHeader } from "./frame-header"
 import { NodeDetailSheet } from "./nodes/node-detail-sheet"
@@ -19,7 +24,36 @@ type ReactFlowFrameProps = {
   hasPublishedVersion: boolean
 }
 
-export function ReactFlowFrame({
+export function ReactFlowFrame(
+  props: ReactFlowFrameProps | NativeSourceFlowFrameProps,
+) {
+  if ("sourceBinding" in props) {
+    const binding = props.sourceBinding
+    const sourceScope = JSON.stringify([
+      binding.bindingId,
+      binding.workspaceId,
+      binding.flowId,
+      binding.registryId,
+      binding.bindingVersion,
+      [...binding.capabilities].sort(),
+    ])
+    return <NativeSourceFrameBoundary key={sourceScope} {...props} />
+  }
+  return <LegacyReactFlowFrame {...props} />
+}
+
+/** Семантическая привязка меняет mount; клонирование тех же props сохраняет локальный черновик. */
+function NativeSourceFrameBoundary(props: NativeSourceFlowFrameProps) {
+  const [sourceBinding] = useState(() =>
+    Object.freeze({
+      ...props.sourceBinding,
+      capabilities: Object.freeze([...props.sourceBinding.capabilities]),
+    }),
+  )
+  return <NativeSourceFlowFrame {...props} sourceBinding={sourceBinding} />
+}
+
+function LegacyReactFlowFrame({
   flow,
   flowVersion,
   canRevertToPublished,
@@ -76,31 +110,33 @@ export function ReactFlowFrame({
 
   return (
     <FlowHistoryStoreProvider key={flowVersion.id}>
-      <FrameHeader
-        cancelAutosave={cancelAutosave}
-        canRevertToPublished={
-          (canRevertToPublished || draftDirtied) && hasPublishedVersion
-        }
-        flow={flow}
-        hasPublishedVersion={hasPublishedVersion}
-        markSaved={markSaved}
-      />
+      <ReceiptEmailTemplateDraftProvider>
+        <FrameHeader
+          cancelAutosave={cancelAutosave}
+          canRevertToPublished={
+            (canRevertToPublished || draftDirtied) && hasPublishedVersion
+          }
+          flow={flow}
+          hasPublishedVersion={hasPublishedVersion}
+          markSaved={markSaved}
+        />
 
-      <ReactFlowWrapper
-        flowVersion={flowVersion}
-        onAutosaveCancelChange={handleAutosaveCancelChange}
-        onAutosaveFlushChange={handleAutosaveFlushChange}
-        onDraftDirtiedChange={handleDraftDirtiedChange}
-        onMarkSavedChange={handleMarkSavedChange}
-        setOpenNodeDetailSheet={setOpenNodeDetailSheet}
-      />
+        <ReactFlowWrapper
+          flowVersion={flowVersion}
+          onAutosaveCancelChange={handleAutosaveCancelChange}
+          onAutosaveFlushChange={handleAutosaveFlushChange}
+          onDraftDirtiedChange={handleDraftDirtiedChange}
+          onMarkSavedChange={handleMarkSavedChange}
+          setOpenNodeDetailSheet={setOpenNodeDetailSheet}
+        />
 
-      <NodeDetailSheet
-        onOpenChange={handleNodeDetailSheetOpenChange}
-        open={openNodeDetailSheet}
-      />
+        <NodeDetailSheet
+          onOpenChange={handleNodeDetailSheetOpenChange}
+          open={openNodeDetailSheet}
+        />
 
-      <ButtonEditorDialog />
+        <ButtonEditorDialog />
+      </ReceiptEmailTemplateDraftProvider>
     </FlowHistoryStoreProvider>
   )
 }

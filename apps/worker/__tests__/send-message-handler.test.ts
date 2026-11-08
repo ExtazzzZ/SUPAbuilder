@@ -18,6 +18,8 @@ const {
   mockFindConversation,
   mockRecordDelivered,
   mockAllIntegrations,
+  mockPostSignedEnvelope,
+  mockResolveApiStatusOwner,
 } = vi.hoisted(() => {
   const updateChain = {
     set: vi.fn().mockReturnThis(),
@@ -51,6 +53,8 @@ const {
     mockFindConversation: vi.fn(),
     mockRecordDelivered: vi.fn().mockResolvedValue(true),
     mockAllIntegrations: {} as Record<string, { deliveryReceipts: boolean }>,
+    mockPostSignedEnvelope: vi.fn(),
+    mockResolveApiStatusOwner: vi.fn(),
   }
 })
 
@@ -61,6 +65,7 @@ vi.mock("@chatbotx.io/analytics", () => ({
 }))
 
 vi.mock("@chatbotx.io/business", () => ({
+  buildContext: vi.fn().mockResolvedValue({ workspaceId: "ws-1" }),
   contactActivityService: { recordDelivered: mockRecordDelivered },
   contactInboxService: {
     recordOutboundMessageSent: mockRecordOutboundMessageSent,
@@ -74,6 +79,7 @@ vi.mock("@chatbotx.io/business", () => ({
   publishWorkspaceRealtimeEvent: mockQueueWorkspaceRealtimeEvent,
   queueWorkspaceRealtimeEvent: mockQueueWorkspaceRealtimeEvent,
   messageService: {
+    resolveApiStatusOwner: mockResolveApiStatusOwner,
     findWithAttachments: vi.fn().mockResolvedValue(null),
     updateAttributes: vi.fn().mockResolvedValue(undefined),
     updateSendError: (input: {
@@ -151,8 +157,26 @@ vi.mock("../src/lib/logger", () => ({
 
 vi.mock("../src/services/integrations", () => ({
   allIntegrations: mockAllIntegrations,
+  integrationService: {
+    identifyInboxAndIntegrationAuthFromIdentifier: vi.fn().mockResolvedValue({
+      inbox: { id: "inbox-1", workspaceId: "ws-1", channel: "api" },
+      integrationRow: {
+        enabled: true,
+        inboxId: "inbox-1",
+        workspaceId: "ws-1",
+      },
+    }),
+  },
   resolveIntegrationContextFromContactInbox:
     mockResolveIntegrationContextFromContactInbox,
+}))
+
+vi.mock("@chatbotx.io/integration-api/lib/delivery", () => ({
+  postSignedEnvelope: mockPostSignedEnvelope,
+}))
+
+vi.mock("../src/integration/handlers/flow", () => ({
+  runFlowPostback: vi.fn(),
 }))
 
 vi.mock("@chatbotx.io/worker-config", () => ({
@@ -164,6 +188,12 @@ const { sendFlowStepToChannel, sendMessageToChannel } = await import(
 )
 const { ChannelError, ChannelErrorCategory } = await import("@chatbotx.io/sdk")
 const { logger } = await import("../src/lib/logger")
+const { integration: apiIntegration } = await import(
+  "@chatbotx.io/integration-api"
+)
+const { handleMessageStatus } = await import(
+  "../src/integration/handlers/message-status"
+)
 
 const conversation = {
   id: "conv-1",
@@ -229,6 +259,73 @@ describe("chat send-message handlers", () => {
         text: "hello",
         ...overrides,
       }) as never
+
+    test.each([
+      null,
+      "failed",
+    ])("API callback подтверждает очередь без преждевременного delivered, последующий статус: %s", async (status) => {
+      // Descriptor, SDK getter и handlers настоящие; callback/БД/события изолированы.
+      mockAllIntegrations.api = apiIntegration
+      mockPostSignedEnvelope.mockResolvedValue({ messageId: "crm-job-1" })
+      mockResolveIntegrationContextFromContactInbox.mockResolvedValue({
+        integration: apiIntegration,
+        ctx: {
+          workspaceId: "ws-1",
+          auth: {
+            callbackUrl: "https://crm.example.test/callback",
+            signingSecret: "synthetic-test-secret",
+          },
+        },
+      })
+      const apiContactInbox = { ...contactInbox, channel: "api" }
+      const message = textMessage({
+        createdAt: new Date("2026-11-06T00:00:00Z"),
+        contentAttributes: {},
+      })
+
+      const result = await sendMessageToChannel({
+        conversation: conversation as never,
+        contactInbox: apiContactInbox as never,
+        message,
+      })
+
+      expect(result).toEqual({ messageIds: ["crm-job-1"], sentCount: 1 })
+      expect(mockPostSignedEnvelope).toHaveBeenCalledTimes(1)
+      expect(mockRecordDelivered).not.toHaveBeenCalled()
+
+      if (status) {
+        mockResolveApiStatusOwner.mockResolvedValue({
+          message,
+          contactInbox: {
+            ...apiContactInbox,
+            conversation,
+            contact: { id: "contact-1", workspaceId: "ws-1" },
+          },
+        })
+        await handleMessageStatus({
+          integrationType: "api",
+          integrationIdentifier: "inbox-1",
+          payload: {
+            messageId: "crm-job-1",
+            status,
+            timestamp: "2026-11-06T00:00:01Z",
+            error: { code: "platform-rejected" },
+          },
+        })
+        expect(mockEmit).toHaveBeenCalledWith(
+          "message:failed",
+          expect.objectContaining({
+            action: expect.objectContaining({ messageId: "msg-1" }),
+            errorData: { code: "platform-rejected" },
+            willRetry: false,
+          }),
+        )
+      }
+      expect(mockRecordDelivered).not.toHaveBeenCalled()
+      expect(
+        mockEmit.mock.calls.some(([event]) => event === "message:delivered"),
+      ).toBe(false)
+    })
 
     test("records a successful send as delivered on a channel without receipts", async () => {
       mockAllIntegrations.messenger = { deliveryReceipts: false }

@@ -4,9 +4,11 @@ import {
   sendMessageNodeDefaultFn,
   sendVideoStepDefaultFn,
 } from "@chatbotx.io/flow-config"
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
 const {
+  mockWithLegacyFlow,
+  mockFreshVersion,
   mockCreateId,
   mockDbTransaction,
   mockFlowFindFirst,
@@ -28,6 +30,8 @@ const {
   const mockTxUpdate = vi.fn().mockReturnValue({ set: mockTxSet })
 
   return {
+    mockWithLegacyFlow: vi.fn(),
+    mockFreshVersion: vi.fn(),
     mockCreateId: vi.fn(),
     mockDbTransaction: vi.fn(),
     mockFlowFindFirst: vi.fn(),
@@ -46,7 +50,13 @@ const {
 
 vi.mock("@chatbotx.io/database/client", () => ({
   db: {
-    query: { flowModel: { findFirst: mockFlowFindFirst } },
+    query: {
+      flowModel: {
+        findFirst: vi.fn(() => {
+          throw new Error("Чтение Flow вне транзакции владельца")
+        }),
+      },
+    },
     transaction: mockDbTransaction,
     update: mockTxUpdate,
   },
@@ -106,6 +116,28 @@ vi.mock("../src/messenger-welcome-message-flow/service", () => ({
   messengerWelcomeMessageFlowService: { enqueueSync: mockEnqueueSync },
 }))
 
+const transaction = {
+  query: {
+    flowModel: { findFirst: mockFlowFindFirst },
+    flowVersionModel: { findFirst: mockFreshVersion },
+  },
+  insert: mockTxInsert,
+  update: mockTxUpdate,
+}
+vi.mock("../src/supacrm-source-binding/service", () => ({
+  supacrmSourceBindingService: { withLegacyFlow: mockWithLegacyFlow },
+}))
+beforeEach(() => {
+  mockCreateId.mockReset()
+  mockDbTransaction.mockReset().mockImplementation((work) => work(transaction))
+  mockFreshVersion.mockReset()
+  mockWithLegacyFlow
+    .mockReset()
+    .mockImplementation((_scope, work, tx) =>
+      tx ? work(tx) : mockDbTransaction(work),
+    )
+})
+
 const { flowVersionService } = await import("../src/flow-version/service")
 
 describe("flowVersionService.publish", () => {
@@ -117,7 +149,9 @@ describe("flowVersionService.publish", () => {
     mockFlowFindFirst.mockResolvedValue({
       id: "flow-1",
       workspaceId: "ws-1",
-      flowVersions: [{ id: "draft-1", startNodeId: "node-1" }],
+      flowVersions: [
+        { id: "draft-1", startNodeId: "node-1", nodes: [], edges: [] },
+      ],
     })
     mockCreateId
       .mockReturnValueOnce("1")
@@ -132,7 +166,7 @@ describe("flowVersionService.publish", () => {
           insert: typeof mockTxInsert
           update: typeof mockTxUpdate
         }) => Promise<unknown>,
-      ) => fn({ insert: mockTxInsert, update: mockTxUpdate }),
+      ) => fn(transaction),
     )
 
     const nodes = [sendMessageNodeDefaultFn({})]
@@ -143,6 +177,10 @@ describe("flowVersionService.publish", () => {
       edges: [],
     })
 
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation: "publish" },
+      expect.any(Function),
+    )
     // 1) reset other latest versions
     expect(mockTxUpdate).toHaveBeenNthCalledWith(1, {
       id: "flowVersionModel.id",
@@ -192,7 +230,9 @@ describe("flowVersionService.publish", () => {
     mockFlowFindFirst.mockResolvedValue({
       id: "flow-1",
       workspaceId: "ws-1",
-      flowVersions: [{ id: "draft-1", startNodeId: "node-1" }],
+      flowVersions: [
+        { id: "draft-1", startNodeId: "node-1", nodes: [], edges: [] },
+      ],
     })
     mockCreateId
       .mockReturnValueOnce("1")
@@ -206,7 +246,7 @@ describe("flowVersionService.publish", () => {
           insert: typeof mockTxInsert
           update: typeof mockTxUpdate
         }) => Promise<unknown>,
-      ) => fn({ insert: mockTxInsert, update: mockTxUpdate }),
+      ) => fn(transaction),
     )
 
     await flowVersionService.publish({
@@ -268,20 +308,31 @@ describe("flowVersionService.publish", () => {
       .mockReturnValueOnce("4")
       .mockReturnValue("5")
     mockDbTransaction.mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ insert: mockTxInsert, update: mockTxUpdate }),
+      async (fn: (tx: unknown) => Promise<unknown>) => fn(transaction),
     )
 
-    await flowVersionService.restore({
-      version: {
+    const savedVersion = {
+      id: "9",
+      flowId: "flow-1",
+      workspaceId: "ws-1",
+      nodes: [sendMessageNodeDefaultFn({})],
+      edges: [],
+      startNodeId: "1",
+    } as never
+    mockFreshVersion.mockResolvedValue(savedVersion)
+    await flowVersionService.restore({ version: savedVersion })
+    expect(mockFreshVersion).toHaveBeenCalledWith({
+      where: {
         id: "9",
         flowId: "flow-1",
         workspaceId: "ws-1",
-        nodes: [sendMessageNodeDefaultFn({})],
-        edges: [],
-        startNodeId: "1",
-      } as never,
+        isDraft: false,
+      },
     })
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation: "restore" },
+      expect.any(Function),
+    )
 
     expect(mockEnqueueSync).toHaveBeenCalledWith({
       workspaceId: "ws-1",
@@ -297,12 +348,13 @@ describe("flowVersionService.publish", () => {
     mockFlowFindFirst.mockResolvedValue({
       id: "flow-1",
       workspaceId: "ws-1",
-      flowVersions: [{ id: "draft-1", startNodeId: "node-1" }],
+      flowVersions: [
+        { id: "draft-1", startNodeId: "node-1", nodes: [], edges: [] },
+      ],
     })
     mockCreateId.mockReturnValue("new-version-1")
     mockDbTransaction.mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ insert: mockTxInsert, update: mockTxUpdate }),
+      async (fn: (tx: unknown) => Promise<unknown>) => fn(transaction),
     )
     mockCancelStale.mockRejectedValueOnce(new Error("boom"))
 
@@ -336,7 +388,7 @@ describe("flowVersionService.publish", () => {
       }),
     ).rejects.toThrow("Flow not found")
 
-    expect(mockDbTransaction).not.toHaveBeenCalled()
+    expect(mockDbTransaction).toHaveBeenCalledTimes(1)
   })
 
   test("throws notFoundException when the flow has no draft version", async () => {
@@ -355,7 +407,7 @@ describe("flowVersionService.publish", () => {
       }),
     ).rejects.toThrow("Flow not found")
 
-    expect(mockDbTransaction).not.toHaveBeenCalled()
+    expect(mockDbTransaction).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -367,6 +419,8 @@ describe("flowVersionService.updateDraftByFlowId", () => {
   test("saves an in-progress graph without publish validation", async () => {
     vi.spyOn(flowVersionService, "findDraft").mockResolvedValue({
       id: "draft-1",
+      nodes: [],
+      edges: [],
     } as never)
 
     await expect(
@@ -377,5 +431,95 @@ describe("flowVersionService.updateDraftByFlowId", () => {
         edges: [] as never,
       }),
     ).resolves.toBeUndefined()
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation: "updateDraft" },
+      expect.any(Function),
+    )
+    expect(flowVersionService.findDraft).toHaveBeenCalledWith(
+      { flowId: "flow-1", workspaceId: "ws-1" },
+      transaction,
+    )
+  })
+})
+
+describe("Подключение guard к publish и restore", () => {
+  afterEach(() => vi.clearAllMocks())
+  test.each([
+    "publish",
+    "restore",
+    "updateDraft",
+  ])("DENY %s запрещает записи и внешнюю синхронизацию", async (operation) => {
+    mockWithLegacyFlow.mockRejectedValueOnce(new Error("source_binding_denied"))
+    let call: Promise<unknown>
+    if (operation === "publish") {
+      call = flowVersionService.publish({
+        workspaceId: "ws-1",
+        flowId: "flow-1",
+        nodes: [],
+        edges: [],
+      })
+    } else if (operation === "restore") {
+      call = flowVersionService.restore({
+        version: {
+          id: "9",
+          workspaceId: "ws-1",
+          flowId: "flow-1",
+          nodes: [],
+          edges: [],
+        } as never,
+      })
+    } else {
+      call = flowVersionService.updateDraftByFlowId({
+        workspaceId: "ws-1",
+        flowId: "flow-1",
+        nodes: [],
+        edges: [],
+      })
+    }
+    await expect(call).rejects.toThrow("source_binding_denied")
+    expect(mockWithLegacyFlow).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", flowId: "flow-1", operation },
+      expect.any(Function),
+    )
+    expect(mockDbTransaction).not.toHaveBeenCalled()
+    expect(mockTxInsert).not.toHaveBeenCalled()
+    expect(mockTxUpdate).not.toHaveBeenCalled()
+    expect(mockEnqueueSync).not.toHaveBeenCalled()
+  })
+  test("restore использует сохранённую строку под lock вместо графа caller", async () => {
+    mockCreateId.mockReturnValue("1")
+    const saved = {
+      id: "9",
+      flowId: "flow-1",
+      workspaceId: "ws-1",
+      nodes: [sendMessageNodeDefaultFn({})],
+      edges: [],
+      startNodeId: "saved-node",
+    }
+    mockFreshVersion.mockResolvedValue(saved)
+    await flowVersionService.restore({
+      version: { ...saved, nodes: [], startNodeId: "stale-node" } as never,
+    })
+    expect(mockTxSet).toHaveBeenNthCalledWith(4, {
+      nodes: saved.nodes,
+      edges: saved.edges,
+      startNodeId: "saved-node",
+    })
+  })
+  test("Отсутствующая под lock версия запрещает изменение draft и публикацию", async () => {
+    mockFreshVersion.mockResolvedValue(undefined)
+    await expect(
+      flowVersionService.restore({
+        version: {
+          id: "9",
+          workspaceId: "ws-1",
+          flowId: "flow-1",
+          nodes: [],
+          edges: [],
+        } as never,
+      }),
+    ).rejects.toThrow("Flow version not found")
+    expect(mockTxUpdate).not.toHaveBeenCalled()
+    expect(mockEnqueueSync).not.toHaveBeenCalled()
   })
 })

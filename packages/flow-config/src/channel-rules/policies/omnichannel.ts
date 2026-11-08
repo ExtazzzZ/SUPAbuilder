@@ -8,7 +8,7 @@ import {
 export const omnichannelFlowPolicy = defineChannelFlowPolicy({
   limits: {
     buttonCount: 3,
-    buttonLabel: 20,
+    buttonLabel: 80,
     text: 1000,
   },
   supported: omnichannelDeliverableStepTypes,

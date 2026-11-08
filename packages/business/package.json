@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
+    "./supacrm-source-binding": "./src/supacrm-source-binding/service.ts",
+    "./supacrm-source-binding/provision": "./src/supacrm-source-binding/provision.ts",
+    "./supacrm-catalog": "./src/supacrm-catalog/index.ts",
     ".": "./src/index.ts",
     "./admin-workspace/constants": "./src/admin-workspace/constants.ts",
     "./ads-analytics/date-range": "./src/ads-analytics/date-range.ts",

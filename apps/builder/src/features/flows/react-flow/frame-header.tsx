@@ -2,6 +2,7 @@
 
 import type { Edge, Node } from "@xyflow/react"
 import { useTranslations } from "next-intl"
+import type { ReactNode } from "react"
 import { AppBreadcrumb } from "@/components/app-breadcrumb"
 import type { FlowResource } from "../schema/resource"
 import { FlowEditToolbar } from "./flow-edit-toolbar"
@@ -12,8 +13,10 @@ export function FrameHeader({
   hasPublishedVersion,
   cancelAutosave,
   markSaved,
+  sourceActions,
 }: {
   flow: FlowResource
+  sourceActions?: ReactNode
   canRevertToPublished: boolean
   hasPublishedVersion: boolean
   cancelAutosave: (() => void) | null
@@ -36,14 +39,18 @@ export function FrameHeader({
       </div>
       {/* <ThemeSwitcher /> */}
 
-      <FlowEditToolbar
-        cancelAutosave={cancelAutosave}
-        canRevertToPublished={canRevertToPublished}
-        flow={flow}
-        hasPublishedVersion={hasPublishedVersion}
-        markSaved={markSaved}
-        workspaceId={flow.workspaceId}
-      />
+      {sourceActions === undefined ? (
+        <FlowEditToolbar
+          cancelAutosave={cancelAutosave}
+          canRevertToPublished={canRevertToPublished}
+          flow={flow}
+          hasPublishedVersion={hasPublishedVersion}
+          markSaved={markSaved}
+          workspaceId={flow.workspaceId}
+        />
+      ) : (
+        sourceActions
+      )}
     </header>
   )
 }

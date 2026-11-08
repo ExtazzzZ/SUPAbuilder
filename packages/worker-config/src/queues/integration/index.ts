@@ -287,6 +287,18 @@ export type IntegrationJobRunFlowNode = {
     startFromStepId?: string
     /** Stable logical execution identity for asynchronous flow continuations. */
     flowExecutionKey?: string
+    /** Причина меню API-моста CRM; не восстанавливается из trace или metadata. */
+    crmFulfillmentContinuation?: {
+      fulfillmentRef: string
+      flowId: string
+      flowVersionId: string
+      terminalEventId: string
+      blockId: string
+    }
+    crmNavigation?: {
+      sourceEventId: string
+      updateMode?: "send_new" | "edit_previous"
+    }
     /** Immutable inbound source identity, forwarded across every continuation. */
     triggerMessageId?: string
     triggerMessageCreatedAt?: Date
@@ -363,6 +375,17 @@ export type IntegrationJobSendFlowPostback = {
     conversationId: string | ConversationModel
     contactInboxId: string | ContactInboxModel
     action: string
+    crmFulfillmentContinuation?: {
+      fulfillmentRef: string
+      flowId: string
+      flowVersionId: string
+      terminalEventId: string
+      blockId: string
+    }
+    crmNavigation?: {
+      sourceEventId: string
+      updateMode?: "send_new" | "edit_previous"
+    }
     ref?: string | null
     webhookType?: string
     messageId?: string
@@ -378,6 +401,17 @@ export type IntegrationJobSendFlowQuickReply = {
     conversationId: string | ConversationModel
     contactInboxId: string | ContactInboxModel
     action: string
+    crmFulfillmentContinuation?: {
+      fulfillmentRef: string
+      flowId: string
+      flowVersionId: string
+      terminalEventId: string
+      blockId: string
+    }
+    crmNavigation?: {
+      sourceEventId: string
+      updateMode?: "send_new" | "edit_previous"
+    }
     ref?: string | null
     inboxId?: string
     webhookType?: string

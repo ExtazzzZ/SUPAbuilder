@@ -297,6 +297,11 @@ type RemapEntryArgs = {
 const remapEntry = (args: RemapEntryArgs): unknown => {
   const { key, child, childPath, container, idMaps, options, depth } = args
 
+  // Exact source triplet is one immutable pin. Foreign imports detach it before remapping.
+  if (key === "supacrmFormTemplate") {
+    return structuredClone(child)
+  }
+
   const scalarKind = REFERENCE_FIELD_ENTITY_KIND[key]
   if (scalarKind) {
     // A `bot_field:<id>` token can appear in any customField-kind slot

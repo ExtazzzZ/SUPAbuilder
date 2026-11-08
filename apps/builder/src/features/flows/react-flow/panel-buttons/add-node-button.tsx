@@ -10,9 +10,18 @@ import {
   type ReactFlowInstance,
   useReactFlow,
 } from "@xyflow/react"
-import { PlusIcon } from "lucide-react"
+import { PlusIcon, ShoppingBagIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useState } from "react"
+import { addSupacrmCheckoutNode } from "../../supacrm-checkout/add-checkout-node"
+import { checkoutTitleKeys } from "../../supacrm-checkout/checkout-summary"
+import { addSupacrmDataRequestNode } from "../../supacrm-data-request/add-data-request-node"
+import { addSupacrmFormNode } from "../../supacrm-form/add-form-node"
+import { addSupacrmFulfillmentNode } from "../../supacrm-fulfillment/add-fulfillment-node"
+import { addSupacrmOperatorNode } from "../../supacrm-operator/add-operator-node"
+import { addSupacrmProductNode } from "../../supacrm-product/add-product-node"
+import { addSupacrmReminderNode } from "../../supacrm-reminder/add-reminder-node"
+import { addSupacrmVariableNode } from "../../supacrm-variable/add-variable-node"
 import { allNodesConfig } from "../nodes/node-config"
 import type { TranslationFn } from "../nodes/types"
 
@@ -37,6 +46,110 @@ export default function AddNodeButton() {
       />
       <PopoverContent className="w-max max-w-xs p-2">
         <div className="flex flex-col items-start">
+          <Button
+            className="w-full justify-start whitespace-nowrap"
+            onClick={() => {
+              addSupacrmReminderNode(reactFlow, t)
+              setOpen(false)
+            }}
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("supacrmReminder.label")}
+          </Button>
+          <Button
+            className="w-full justify-start whitespace-nowrap"
+            onClick={() => {
+              addSupacrmDataRequestNode(reactFlow, t)
+              setOpen(false)
+            }}
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("supacrmDataRequest.label")}
+          </Button>
+          <Button
+            className="w-full justify-start whitespace-nowrap"
+            onClick={() => {
+              addSupacrmOperatorNode(reactFlow, t)
+              setOpen(false)
+            }}
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("supacrmOperator.label")}
+          </Button>
+          {(["execute", "issue"] as const).map((kind) => (
+            <Button
+              className="w-full justify-start whitespace-nowrap"
+              key={kind}
+              onClick={() => {
+                addSupacrmFulfillmentNode(reactFlow, t, kind)
+                setOpen(false)
+              }}
+              variant="ghost"
+            >
+              <PlusIcon />
+              {t(`supacrmFulfillment.${kind}`)}
+            </Button>
+          ))}
+          {(
+            [
+              "promo",
+              "bonus",
+              "referral_summary",
+              "offer",
+              "receipt",
+              "link",
+              "wait",
+            ] as const
+          ).map((kind) => (
+            <Button
+              className="w-full justify-start whitespace-nowrap"
+              key={kind}
+              onClick={() => {
+                addSupacrmCheckoutNode(reactFlow, t, kind)
+                setOpen(false)
+              }}
+              variant="ghost"
+            >
+              <PlusIcon />
+              {t(checkoutTitleKeys[kind])}
+            </Button>
+          ))}
+          <Button
+            className="w-full justify-start whitespace-nowrap"
+            onClick={() => {
+              addSupacrmFormNode(reactFlow, t)
+              setOpen(false)
+            }}
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("supacrmForm.label")}
+          </Button>
+          <Button
+            className="w-full justify-start whitespace-nowrap"
+            onClick={() => {
+              addSupacrmProductNode(reactFlow, t)
+              setOpen(false)
+            }}
+            variant="ghost"
+          >
+            <ShoppingBagIcon />
+            {t("supacrmProduct.label")}
+          </Button>
+          <Button
+            className="w-full justify-start whitespace-nowrap"
+            onClick={() => {
+              addSupacrmVariableNode(reactFlow, t)
+              setOpen(false)
+            }}
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("supacrmVariable.label")}
+          </Button>
           {Object.values(allNodesConfig).map((it, idx) => {
             const item = it?.(t)
             return item ? (

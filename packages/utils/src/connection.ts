@@ -143,6 +143,7 @@ export type ConnectionConfigField = z.infer<typeof connectionConfigFieldSchema>
 export const selfServeSecretSchema = z.object({
   kind: z.literal("api_channel_token"),
   token: z.string(),
+  signingSecret: z.string().optional(),
 })
 export type SelfServeSecret = z.infer<typeof selfServeSecretSchema>
 

@@ -9,6 +9,8 @@ const {
   isAtLimit,
   assertApiNotRateLimited,
   listNodes,
+  catalogList,
+  findFlow,
 } = vi.hoisted(() => ({
   findWorkspaceByTokenHash: vi.fn(),
   isWorkspaceScheduledForDeletion: vi.fn().mockReturnValue(false),
@@ -16,6 +18,13 @@ const {
   isAtLimit: vi.fn().mockResolvedValue(false),
   assertApiNotRateLimited: vi.fn().mockResolvedValue(undefined),
   listNodes: vi.fn(),
+  catalogList: vi.fn(),
+  findFlow: vi.fn(),
+}))
+
+vi.mock("@chatbotx.io/business/supacrm-catalog", async (original) => ({
+  ...(await original<typeof import("@chatbotx.io/business/supacrm-catalog")>()),
+  supacrmCatalogService: { list: catalogList },
 }))
 
 vi.mock("@chatbotx.io/business", () => ({
@@ -23,7 +32,7 @@ vi.mock("@chatbotx.io/business", () => ({
   isWorkspaceScheduledForDeletion,
   userQuotaService: { getAccessState },
   quotaEnforcementService: { isAtLimit },
-  flowService: { listNodes },
+  flowService: { listNodes, findById: findFlow },
 }))
 
 vi.mock("@/lib/log", () => ({
@@ -70,6 +79,21 @@ beforeEach(() => {
 })
 
 describe("real router: flows.listNodes scope wiring", () => {
+  test("CRM catalog rejects a token outside automation scope", async () => {
+    findWorkspaceByTokenHash.mockResolvedValue(authResult(["contacts"]))
+    await expect(
+      invoke(flowsPublicRouter.crmCatalog, undefined),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" })
+    expect(catalogList).not.toHaveBeenCalled()
+  })
+  test("CRM catalog resolves scope from the authenticated workspace", async () => {
+    findWorkspaceByTokenHash.mockResolvedValue(authResult(["automation"]))
+    catalogList.mockResolvedValue({ status: "ok", items: [] })
+    await expect(
+      invoke(flowsPublicRouter.crmCatalog, undefined),
+    ).resolves.toEqual({ status: "ok", items: [] })
+    expect(catalogList).toHaveBeenCalledWith({ workspaceId: "ws-1" })
+  })
   test("a contacts-scoped token is denied GET /v1/flows/{id}/nodes with FORBIDDEN", async () => {
     findWorkspaceByTokenHash.mockResolvedValue(authResult(["contacts"]))
 
@@ -106,4 +130,32 @@ describe("real router: flows.listNodes scope wiring", () => {
       invoke(flowsPublicRouter.listNodes, { id: "7" }),
     ).resolves.toEqual({ data: [] })
   })
+})
+
+test("navigation search denies unrelated token scopes and reads only the token workspace", async () => {
+  findWorkspaceByTokenHash.mockResolvedValue(authResult(["contacts"]))
+  await expect(
+    invoke(flowsPublicRouter.search, { id: "7" }),
+  ).rejects.toMatchObject({ code: "FORBIDDEN" })
+  expect(findFlow).not.toHaveBeenCalled()
+  findWorkspaceByTokenHash.mockResolvedValue(authResult(["automation"]))
+  findFlow.mockResolvedValue({
+    draftVersionId: "10",
+    flowVersions: [
+      {
+        id: "10",
+        isDraft: true,
+        nodes: [{ id: "101", type: "wait", data: { name: "Пауза" } }],
+        edges: [],
+      },
+    ],
+  })
+  await expect(
+    invoke(flowsPublicRouter.search, { id: "7", query: "ПАУЗА" }),
+  ).resolves.toEqual({
+    data: [{ nodeId: "101", label: "Пауза", type: "wait" }],
+    sections: [],
+    connections: [],
+  })
+  expect(findFlow).toHaveBeenCalledWith({ id: "7", workspaceId: "ws-1" })
 })

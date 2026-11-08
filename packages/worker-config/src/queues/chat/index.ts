@@ -74,6 +74,11 @@ export type ChatJobSendChannelMessage = {
 export type ChatJobSendFlowStep = {
   type: typeof ChatJobAction.sendFlowMessage
   data: {
+    operationId?: string
+    crmNavigation?: {
+      sourceEventId: string
+      updateMode?: "send_new" | "edit_previous"
+    }
     conversationId: string
     contactInboxId?: string
     flowId: string

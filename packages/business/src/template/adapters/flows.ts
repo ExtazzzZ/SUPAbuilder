@@ -7,6 +7,7 @@ import type {
 } from "@chatbotx.io/flow-config"
 import {
   collectFieldReferences,
+  detachImportedReceiptEmailTemplates,
   remapFlowGraphReferences,
 } from "@chatbotx.io/flow-config"
 import { flowService } from "../../flow"
@@ -93,20 +94,28 @@ export const flowsAdapter: ResourceAdapter = {
 
     for (const rawEntry of entries) {
       const entry = rawEntry as unknown as TemplateFlowEntry
-      const remapped = remapFlowGraphReferences(
-        { nodes: entry.nodes, edges: entry.edges },
-        ctx.idMaps,
-        {
-          kinds: FLOW_INSERT_KINDS,
-          onUnresolved: (ref) =>
-            ctx.warn({
-              category: "flows",
-              entityKind: ref.entityKind,
-              path: `flows.${entry.sourceId}.${ref.path}`,
-              value: ref.value,
-            }),
-        },
-      )
+      const graph =
+        ctx.sourceWorkspaceId === ctx.workspaceId
+          ? { nodes: entry.nodes, edges: entry.edges }
+          : detachImportedReceiptEmailTemplates({
+              nodes: entry.nodes,
+              edges: entry.edges,
+            })
+      if ("warnings" in graph) {
+        for (const warning of graph.warnings) {
+          ctx.warn({ category: "flows", ...warning })
+        }
+      }
+      const remapped = remapFlowGraphReferences(graph, ctx.idMaps, {
+        kinds: FLOW_INSERT_KINDS,
+        onUnresolved: (ref) =>
+          ctx.warn({
+            category: "flows",
+            entityKind: ref.entityKind,
+            path: `flows.${entry.sourceId}.${ref.path}`,
+            value: ref.value,
+          }),
+      })
 
       const requestedFolderId = resolveFolderReference(ctx, entry)
 

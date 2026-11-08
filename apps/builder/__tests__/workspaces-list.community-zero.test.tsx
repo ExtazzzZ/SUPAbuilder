@@ -21,7 +21,10 @@ vi.mock("@/env", () => ({
 // package and the workspace-lifecycle subpath, used by the nested
 // WorkspaceStatusSwitch); the full package pulls in the database client,
 // which throws outside a real server runtime.
-vi.mock("@chatbotx.io/business", () => ({
+vi.mock("@chatbotx.io/business", async () => ({
+  ...(await import(
+    "../../../packages/business/src/workspace/shared-workspace"
+  )),
   isWorkspaceScheduledForDeletion: (workspace: {
     scheduledDeletionAt?: Date | string | null
   }) => workspace.scheduledDeletionAt !== null,
@@ -65,6 +68,7 @@ async function renderWorkspacesList(
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   if (root) {
     act(() => {
       root?.unmount()
@@ -77,6 +81,11 @@ afterEach(() => {
 })
 
 describe("WorkspacesList — community edition, zero workspaces", () => {
+  test("SUPAlogin hides workspace creation even without membership", async () => {
+    vi.stubEnv("SUPALOGIN_ISSUER", "https://login.example.test")
+    const el = await renderWorkspacesList([])
+    expect(el.querySelector('a[href="/channels/create"]')).toBeNull()
+  })
   test("shows the create-workspace card, not just a static message", async () => {
     const el = await renderWorkspacesList([])
 

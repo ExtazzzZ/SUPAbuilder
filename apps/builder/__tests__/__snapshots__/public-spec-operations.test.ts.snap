@@ -1679,8 +1679,23 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "flows.changeReceiptEmailTemplate",
+    "path": "/v1/flows/receipt-email-template-change",
+  },
+  {
+    "method": "POST",
     "operationId": "flows.create",
     "path": "/v1/flows",
+  },
+  {
+    "method": "GET",
+    "operationId": "flows.crmCatalog",
+    "path": "/v1/flows/crm-catalog",
+  },
+  {
+    "method": "GET",
+    "operationId": "flows.crmCatalogImage",
+    "path": "/v1/flows/crm-catalog/{itemId}/image",
   },
   {
     "method": "DELETE",
@@ -1716,6 +1731,21 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "POST",
     "operationId": "flows.publish",
     "path": "/v1/flows/{id}/publish",
+  },
+  {
+    "method": "GET",
+    "operationId": "flows.receiptEmailTemplateCandidates",
+    "path": "/v1/flows/receipt-email-templates",
+  },
+  {
+    "method": "GET",
+    "operationId": "flows.receiptEmailTemplateUsages",
+    "path": "/v1/flows/receipt-email-template-usages",
+  },
+  {
+    "method": "GET",
+    "operationId": "flows.search",
+    "path": "/v1/flows/{id}/search",
   },
   {
     "method": "PATCH",

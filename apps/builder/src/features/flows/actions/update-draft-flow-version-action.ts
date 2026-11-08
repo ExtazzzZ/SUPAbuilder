@@ -19,6 +19,7 @@ export const updateDraftFlowVersionAction = workspaceActionClient
       id,
       nodes: parsedInput.nodes,
       edges: parsedInput.edges,
+      expectedTemplateBase: parsedInput.expectedTemplateBase,
     })
     return { ok: true as const }
   })

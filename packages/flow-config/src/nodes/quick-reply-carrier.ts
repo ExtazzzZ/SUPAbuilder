@@ -33,6 +33,8 @@ const META_QUICK_REPLY_CARRIER_STEPS = new Set<StepType>([
 const QUICK_REPLY_CARRIER_STEPS_BY_CHANNEL: Partial<
   Record<ChannelType, ReadonlySet<StepType>>
 > = {
+  // API-мост передаёт клавиатуру вместе с одиночным фото; альбомы её не поддерживают.
+  api: new Set<StepType>([stepTypes.enum.sendText, stepTypes.enum.sendImage]),
   instagram: META_QUICK_REPLY_CARRIER_STEPS,
   messenger: META_QUICK_REPLY_CARRIER_STEPS,
   telegram: MEDIA_QUICK_REPLY_CARRIER_STEPS,

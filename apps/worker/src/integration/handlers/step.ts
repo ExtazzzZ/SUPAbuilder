@@ -18,6 +18,7 @@ import {
   IntegrationJobAction,
   integrationQueue,
 } from "@chatbotx.io/worker-config"
+import { createFlowOperationId } from "../../chat/operation-id"
 import { logger } from "../../lib/logger"
 import { mintRandomFlowExecutionKey } from "../flow-execution-key"
 import { syncActiveCampaignContact } from "./active-campaign-handler"
@@ -126,10 +127,12 @@ export async function sendFlowMessage(
     quickReplies,
     sendFrom,
     sentByUserId,
+    crmNavigation,
     commentAnchor,
     appointmentId,
   } = props
   await enqueueFlowStepMessage({
+    operationId: createFlowOperationId(props),
     conversationId: conversation.id,
     contactInboxId: props.contactInbox.id,
     flowId: flowVersion.flowId,
@@ -142,6 +145,7 @@ export async function sendFlowMessage(
     quickReplies,
     sendFrom,
     sentByUserId,
+    crmNavigation,
     commentAnchor,
     appointmentId,
   })
@@ -159,6 +163,7 @@ async function splitTraffic({
   sendFrom,
   sentByUserId,
   nodeVisits,
+  crmNavigation,
   commentAnchor,
   appointmentId,
   triggerMessageId,
@@ -206,6 +211,7 @@ async function splitTraffic({
         triggerMessageId,
         triggerMessageCreatedAt,
         startedByContactMessage,
+        crmNavigation,
         commentAnchor,
         appointmentId,
         origin: webhookChannelOrigin(),
@@ -329,6 +335,7 @@ async function startAnotherNode(
       triggerMessageId: props.triggerMessageId,
       triggerMessageCreatedAt: props.triggerMessageCreatedAt,
       startedByContactMessage: props.startedByContactMessage,
+      crmNavigation: props.crmNavigation,
       commentAnchor: props.commentAnchor,
       origin: webhookChannelOrigin(),
     },
@@ -344,6 +351,7 @@ async function startExternalFlow({
   sendFrom,
   sentByUserId,
   nodeVisits,
+  crmNavigation,
   commentAnchor,
   appointmentId,
   triggerMessageId,
@@ -365,6 +373,7 @@ async function startExternalFlow({
       triggerMessageId,
       triggerMessageCreatedAt,
       startedByContactMessage,
+      crmNavigation,
       commentAnchor,
       origin: webhookChannelOrigin(),
     },
@@ -380,6 +389,7 @@ async function startExternalNode({
   sendFrom,
   sentByUserId,
   nodeVisits,
+  crmNavigation,
   commentAnchor,
   appointmentId,
   triggerMessageId,
@@ -402,6 +412,7 @@ async function startExternalNode({
       triggerMessageId,
       triggerMessageCreatedAt,
       startedByContactMessage,
+      crmNavigation,
       commentAnchor,
       origin: webhookChannelOrigin(),
     },

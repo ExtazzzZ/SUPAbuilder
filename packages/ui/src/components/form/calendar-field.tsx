@@ -4,6 +4,7 @@ import { CalendarIcon } from "lucide-react"
 import type { FieldPath, FieldValues } from "react-hook-form"
 import { Button } from "../ui/button"
 import { Calendar } from "../ui/calendar"
+import { useCalendarLocale } from "../ui/calendar-locale-context"
 import { FormControl } from "../ui/form"
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
 import { FormFieldWrapper } from "./field-wrapper"
@@ -32,6 +33,8 @@ export function CalendarField<T extends FieldValues>({
   descriptionType = "inline",
   formItemClassName,
 }: CalendarFieldProps<T>) {
+  const { locale, pickDate } = useCalendarLocale()
+
   return (
     <FormFieldWrapper
       description={description}
@@ -54,9 +57,9 @@ export function CalendarField<T extends FieldValues>({
                   variant={"outline"}
                 >
                   {field.value ? (
-                    format(field.value, "PPP")
+                    format(field.value, "PPP", { locale })
                   ) : (
-                    <span>{placeholder ?? "Pick a date"}</span>
+                    <span>{placeholder ?? pickDate}</span>
                   )}
                   <CalendarIcon className="ms-auto h-4 w-4 opacity-50" />
                 </Button>

@@ -199,14 +199,14 @@ describe("flowSpecSchema", () => {
 
     const labelSchema = findJsonSchemaNode(
       jsonSchema,
-      "Button label shown to the contact (max 20 characters).",
+      "Button label shown to the contact (max 80 characters).",
     )
     const textSchema = findJsonSchemaNode(
       jsonSchema,
       "Text message body (max 1000 characters). Exactly one of text/imageUrl/fileUrl is required.",
     )
 
-    expect(hasJsonSchemaMaxLength(labelSchema, 20)).toBe(true)
+    expect(hasJsonSchemaMaxLength(labelSchema, 80)).toBe(true)
     expect(hasJsonSchemaMaxLength(textSchema, 1000)).toBe(true)
   })
 
@@ -332,7 +332,7 @@ describe("flowSpecSchema", () => {
         {
           type: "send",
           text: "Hello",
-          buttons: [{ text: "x".repeat(21) }],
+          buttons: [{ text: "x".repeat(81) }],
         },
       ]),
       {

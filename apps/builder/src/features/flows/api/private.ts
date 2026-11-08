@@ -7,6 +7,11 @@ import {
   flowVersionService,
   messengerWelcomeMessageFlowService,
 } from "@chatbotx.io/business"
+import {
+  supacrmCatalogImageSchema,
+  supacrmCatalogResponseSchema,
+  supacrmCatalogService,
+} from "@chatbotx.io/business/supacrm-catalog"
 import { convertStartNodeToMessengerAdsJson } from "@chatbotx.io/integration-messenger/messenger-ads"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
@@ -17,10 +22,38 @@ import { authorizedAPI } from "@/orpc"
 import { listFlows } from "../queries"
 import { listFlowsRequest, listFlowsResponse } from "../schema/query"
 import { welcomeMessageFlowResource } from "../schema/resource"
+import { privateFulfillmentStatus } from "./fulfillment-status"
+import { receiptEmailTemplatePrivateRouter } from "./receipt-email-template"
 
 const welcomeMessageFlowsField = z.array(welcomeMessageFlowResource)
 
 export const privateFlowsAPI = {
+  fulfillmentStatus: privateFulfillmentStatus,
+  ...receiptEmailTemplatePrivateRouter,
+  privateGetSupacrmProductImageAPI: authorizedAPI
+    .route({
+      method: "GET",
+      path: "/workspaces/{workspaceId}/flows/crm-catalog/{itemId}/image",
+      summary: "Изображение товара SUPAcrm",
+      tags: ["Flows"],
+    })
+    .input(withWorkspaceIdSchema.and(z.object({ itemId: z.uuid() })))
+    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .output(supacrmCatalogImageSchema)
+    .handler(async ({ input }) => supacrmCatalogService.image(input)),
+  privateGetSupacrmCatalogAPI: authorizedAPI
+    .route({
+      method: "GET",
+      path: "/workspaces/{workspaceId}/flows/crm-catalog",
+      summary: "Каталог товаров SUPAcrm",
+      tags: ["Flows"],
+    })
+    .input(withWorkspaceIdSchema)
+    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .output(supacrmCatalogResponseSchema)
+    .handler(async ({ input }) =>
+      supacrmCatalogService.list({ workspaceId: input.workspaceId }),
+    ),
   privateListFlowsAPI: authorizedAPI
     .route({
       method: "GET",

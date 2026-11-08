@@ -1,20 +1,22 @@
 "use client"
 
 import { ReactFlowProvider } from "@xyflow/react"
+import { useMemo, useState } from "react"
 import { AppointmentCalendarStoreProvider } from "@/features/appointment-calendars/provider/appointment-calendar-store-context"
 import { PlatformCredentialsStoreProvider } from "@/features/platform-credentials/provider/platform-credentials-store-context"
 import { QuestionnaireStoreProvider } from "@/features/questionnaires/provider/questionnaire-store-context"
+import type { NativeSourceBinding } from "@/lib/source-authoring-native/authorization"
 import { AIToolsStoreProvider } from "../ai-tools/provider/ai-tools-store-context"
-
 import { EmailTopicStoreProvider } from "../email-topics/provider/email-topic-store-context"
 import type { FlowVersionResource } from "../flow-versions/schema/resource"
 import type { IntegrationOpenaiCompatibleResource } from "../integration-openai-compatible/schema/resource"
-
 import { ReactFlowFrame } from "./react-flow/frame"
 import { FlowTemplateStoreProvider } from "./react-flow/stores/flow-template-store-provider"
 import { StepStoreProvider } from "./react-flow/stores/step-store-provider"
 import { WhatsappFlowStoreProvider } from "./react-flow/stores/whatsapp-flow-store-provider"
-import type { FlowWithVersionsResource } from "./schema/resource"
+import type { FlowResource, FlowWithVersionsResource } from "./schema/resource"
+import { nativeSourceBindingIdentity } from "./supacrm-source/native/binding-identity"
+import { createNativeSourceBrowserPort } from "./supacrm-source/native/document-port"
 
 type FlowDetailProps = {
   flow: FlowWithVersionsResource
@@ -24,7 +26,48 @@ type FlowDetailProps = {
   hasPublishedVersion: boolean
 }
 
-export function FlowDetail({
+type SourceFlowDetailProps = {
+  flow: FlowResource
+  sourceBinding: NativeSourceBinding
+}
+
+export function FlowDetail(props: FlowDetailProps | SourceFlowDetailProps) {
+  return "sourceBinding" in props ? (
+    <SourceFlowDetail
+      key={nativeSourceBindingIdentity(props.sourceBinding)}
+      {...props}
+    />
+  ) : (
+    <LegacyFlowDetail {...props} />
+  )
+}
+
+function SourceFlowDetail({
+  flow,
+  sourceBinding: initialBinding,
+}: SourceFlowDetailProps) {
+  const [sourceBinding] = useState(initialBinding)
+  const port = useMemo(() => {
+    try {
+      return createNativeSourceBrowserPort(sourceBinding)
+    } catch {
+      return null
+    }
+  }, [sourceBinding])
+  return (
+    <ReactFlowProvider>
+      <StepStoreProvider initialState={{ activeFlowId: flow.id }}>
+        <ReactFlowFrame
+          flow={flow}
+          sourceBinding={sourceBinding}
+          sourcePort={port}
+        />
+      </StepStoreProvider>
+    </ReactFlowProvider>
+  )
+}
+
+function LegacyFlowDetail({
   flow,
   flowVersion,
   openaiCompatibleIntegrations,

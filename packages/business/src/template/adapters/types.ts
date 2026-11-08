@@ -38,6 +38,8 @@ export type PatchTask = {
 export type TemplateInstallContext = {
   tx: DatabaseClient
   workspaceId: string
+  /** Source workspace of the immutable installation payload, used for atomic settings pins. */
+  sourceWorkspaceId?: string
   installationId: string
   idMaps: Record<string, Map<string, string>>
   track: (entry: {

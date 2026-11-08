@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   getCurrentUserAndAllLinkedWorkspaces: vi.fn(),
@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@chatbotx.io/auth/tenant", () => ({
   resolveTenantByDomain: vi.fn(async () => "1"),
 }))
-vi.mock("@chatbotx.io/business", () => ({
+vi.mock("@chatbotx.io/business", async () => ({
+  ...(await import(
+    "../../../packages/business/src/workspace/shared-workspace"
+  )),
   isPlatformAdmin: vi.fn(async () => false),
   isSuperAdmin: vi.fn(async () => false),
   quotaEnforcementService: {},
@@ -69,6 +72,8 @@ const user = {
   image: null,
 }
 
+afterEach(() => vi.unstubAllEnvs())
+
 function linked(members: unknown[]) {
   mocks.getCurrentUserAndAllLinkedWorkspaces.mockResolvedValue({
     user,
@@ -78,6 +83,12 @@ function linked(members: unknown[]) {
 }
 
 describe("MainPage default workspace", () => {
+  test("SUPAlogin does not create a private workspace for an unlinked user", async () => {
+    vi.stubEnv("SUPALOGIN_ISSUER", "https://login.example.test")
+    linked([])
+    await MainPage()
+    expect(mocks.ensureFirstWorkspace).not.toHaveBeenCalled()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
   })

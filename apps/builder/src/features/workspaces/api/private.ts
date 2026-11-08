@@ -1,4 +1,5 @@
 import {
+  isUserWorkspaceAllowed,
   workspaceDeletionRecordService,
   workspaceMemberService,
 } from "@chatbotx.io/business"
@@ -21,7 +22,11 @@ export const workspacesAuthenticatedAPI = {
       const members = await workspaceMemberService.listByUserId({
         userId: context.user.id,
       })
-      return { workspaces: members.map((member) => member.workspace) }
+      return {
+        workspaces: members
+          .filter((member) => isUserWorkspaceAllowed(member.workspaceId))
+          .map((member) => member.workspace),
+      }
     }),
 
   listDeletedWorkspacesAPI: authorizedAPI

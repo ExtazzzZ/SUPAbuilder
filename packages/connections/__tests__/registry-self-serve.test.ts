@@ -20,7 +20,11 @@ const connection = { id: "conn-1", sourceId: "src-1" }
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.createWithWorkspace.mockResolvedValue({ connection })
-  mocks.createWithToken.mockResolvedValue({ connection, token: "cbx_tok" })
+  mocks.createWithToken.mockResolvedValue({
+    connection,
+    token: "cbx_tok",
+    signingSecret: "signing-secret",
+  })
 })
 
 describe("self-serve registry handlers", () => {
@@ -71,7 +75,11 @@ describe("self-serve registry handlers", () => {
 
     expect(result).toEqual({
       connection,
-      secret: { kind: "api_channel_token", token: "cbx_tok" },
+      secret: {
+        kind: "api_channel_token",
+        token: "cbx_tok",
+        signingSecret: "signing-secret",
+      },
     })
     expect(mocks.createWithToken).toHaveBeenCalledWith({
       ownerId: "owner-1",

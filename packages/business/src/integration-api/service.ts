@@ -179,6 +179,7 @@ class IntegrationApiService extends BaseService {
     workspaceId: string
     inboxId: string
     token: string
+    signingSecret: string
     connection: ConnectionModel
   }> {
     const callbackUrl = input.callbackUrl ?? null
@@ -197,12 +198,13 @@ class IntegrationApiService extends BaseService {
     }
 
     const { token, tokenHash, tokenPrefix } = await generateApiChannelToken()
+    const signingSecret = generateSigningSecret()
     const result = await this.connect({
       ...input,
       auth: {
         authType: "custom",
         callbackUrl,
-        signingSecret: generateSigningSecret(),
+        signingSecret,
       },
       tokenHash,
       tokenPrefix,
@@ -213,6 +215,7 @@ class IntegrationApiService extends BaseService {
       workspaceId: result.workspaceId,
       inboxId: result.inbox.id,
       token,
+      signingSecret,
       connection: result.connection,
     }
   }

@@ -1,6 +1,7 @@
 import { resolveTenantByDomain } from "@chatbotx.io/auth/tenant"
 import {
   isPlatformAdmin,
+  isSupaBuilderSharedMode,
   isSuperAdmin,
   quotaEnforcementService,
   userQuotaService,
@@ -41,7 +42,7 @@ export default async function MainPage() {
   // workspace so MCP/CLI setup does not wait on connecting a channel. Invited
   // users keep the list. A plan-limit failure yields null: fall through to the
   // list rather than redirecting in a loop.
-  if (allWorkspaceMembers.length === 0) {
+  if (allWorkspaceMembers.length === 0 && !isSupaBuilderSharedMode()) {
     const t = await getTranslations("workspaces")
     const workspace = await ensureFirstWorkspace(user.id, {
       name: t("defaultName", { name: user.name || user.email }),

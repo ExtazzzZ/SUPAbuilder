@@ -30,6 +30,11 @@ const SendImageStepViewer = (props: SendImageStepViewerProps) => {
         ) : (
           hasError && <DynamicImagePreviewPlaceholder hasError={hasError} />
         )}
+        {data.caption && (
+          <p className="whitespace-pre-wrap px-3 py-2 text-sm">
+            {data.caption}
+          </p>
+        )}
         {data.buttons.length > 0 && <ButtonGroupViewer data={data.buttons} />}
       </CardContent>
     </Card>

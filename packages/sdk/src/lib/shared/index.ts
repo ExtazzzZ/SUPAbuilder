@@ -39,6 +39,18 @@ export const HandleRequestType = {
 } as const
 
 export type ReceivedMessageResult = {
+  entryFlowId?: string
+  crmFulfillmentContinuation?: {
+    fulfillmentRef: string
+    flowId: string
+    flowVersionId: string
+    terminalEventId: string
+    blockId: string
+  }
+  crmNavigation?: {
+    sourceEventId: string
+    updateMode?: "send_new" | "edit_previous"
+  }
   message: IncomingMessage | null
   contact: IncomingContact
   postbackAction: string | null

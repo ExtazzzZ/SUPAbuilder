@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
 const returningWorkspace = vi.fn(async () => [
   { id: "ws-1", organizationId: "org-1" },
@@ -143,6 +143,8 @@ function createInput() {
   }
 }
 
+afterEach(() => vi.unstubAllEnvs())
+
 beforeEach(() => {
   returningWorkspace
     .mockReset()
@@ -253,6 +255,18 @@ describe("WorkspaceService.create — MAC pre-provisioning", () => {
 })
 
 describe("WorkspaceService.create — happy path", () => {
+  test.each([
+    true,
+    false,
+  ])("SUPAlogin rejects new workspaces before consuming quotas (community=%s)", async (community) => {
+    vi.stubEnv("SUPALOGIN_ISSUER", "https://login.example.test")
+    vi.stubEnv("SUPABUILDER_WORKSPACE_ID", "11759896832695848")
+    isCommunity.mockReturnValue(community)
+    await expect(workspaceService.create(createInput())).rejects.toThrow()
+    expect(quotaEnforcementService.tryConsume).not.toHaveBeenCalled()
+    expect(insert).not.toHaveBeenCalled()
+  })
+
   test("consumes only a workspace seat and creates the owner member", async () => {
     const result = await workspaceService.create(createInput())
 

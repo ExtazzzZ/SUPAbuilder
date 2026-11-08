@@ -195,6 +195,9 @@ vi.mock("@chatbotx.io/database/schema", () => {
 })
 
 vi.mock("@chatbotx.io/business", () => ({
+  supacrmFulfillmentService: {
+    origin: vi.fn(async (input) => ({ ...input, nodeId: "50" })),
+  },
   appointmentCalendarService: {
     findByPublicLinkSlug: mockFindAppointmentCalendarBySlug,
   },
@@ -372,6 +375,8 @@ vi.mock("../src/chat/handlers/send-whatsapp-template", () => ({
 
 import {
   BROADCAST_PAYLOAD_TYPE,
+  createSupacrmFulfillmentNode,
+  decodeButtonPayload,
   SEQUENCE_SCHEDULE_PAYLOAD_TYPE,
 } from "@chatbotx.io/flow-config"
 import type { ChatJobSendFlowStep } from "@chatbotx.io/worker-config"
@@ -496,6 +501,40 @@ describe("sendFlowStep", () => {
     mockFindAppointmentCalendarBySlug.mockResolvedValue(null)
     mockSignAppointmentWebviewToken.mockResolvedValue("webview-token")
     mockMarkReadByOutbound.mockResolvedValue(true)
+  })
+
+  test("fulfillment latest message pin берёт executedFlowVersionId для origin и outputs", async () => {
+    mockFindContactInbox.mockResolvedValue({
+      ...fakeContactInbox,
+      id: "100",
+      channel: "api",
+    })
+    const node = createSupacrmFulfillmentNode({}, "execute")
+    node.data.details.quickReplies.forEach((port, index) => {
+      port.id = String(200 + index)
+    })
+    await sendFlowStep({
+      ...baseParams,
+      flowId: "30",
+      flowVersionId: undefined,
+      executedFlowVersionId: "40",
+      step: node.data.details.steps[0] as SendFlowStepData["step"],
+      quickReplies: node.data.details.quickReplies,
+    })
+    expect(mockSendFlowStepToChannel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flowVersionId: "40",
+        crmFulfillmentOrigin: expect.objectContaining({ flowVersionId: "40" }),
+        step: expect.objectContaining({
+          text: node.data.details.steps[0].text,
+        }),
+      }),
+    )
+    const sent = mockSendFlowStepToChannel.mock.calls[0][0]
+    for (const port of sent.quickReplies) {
+      expect(decodeButtonPayload(port.postback).flowVersionId).toBe("40")
+    }
+    expect(mockResolveContactVariables).not.toHaveBeenCalled()
   })
 
   test("returns early when conversation not found — repository not called", async () => {
@@ -1519,6 +1558,84 @@ describe("sendFlowStep", () => {
     )
     expect(mockSendFlowStepToChannel).toHaveBeenCalledWith(
       expect.objectContaining({ richResponse }),
+    )
+  })
+
+  test("передаёт API-каналу кнопки сообщения вместе с быстрыми ответами", async () => {
+    mockFindContactInbox.mockResolvedValue({
+      ...fakeContactInbox,
+      channel: "api",
+      id: "104",
+    })
+    await sendFlowStep({
+      ...baseParams,
+      flowId: "101",
+      flowVersionId: "102",
+      step: {
+        ...sendTextStep,
+        buttons: [
+          {
+            id: "103",
+            label: "Проверить кнопку",
+            row: 0,
+            buttonType: null,
+            beforeStep: null,
+            steps: [],
+          },
+          {
+            id: "105",
+            label: "Сайт",
+            row: 0,
+            buttonType: "openWebsite",
+            beforeStep: {
+              id: "open-1",
+              stepType: "openWebsite",
+              url: "https://example.com",
+              browserSize: 100,
+            },
+            steps: [],
+          },
+        ],
+      },
+      quickReplies: [
+        {
+          id: "106",
+          label: "Ответ",
+          buttonType: null,
+          beforeStep: null,
+          steps: [],
+        },
+      ],
+    } as SendFlowStepData)
+
+    const sent = mockSendFlowStepToChannel.mock.calls.at(-1)?.[0]
+    expect(sent.quickReplies).toEqual([
+      expect.objectContaining({
+        id: "103",
+        label: "Проверить кнопку",
+        row: 0,
+        buttonType: "postback",
+      }),
+      expect.objectContaining({
+        id: "105",
+        label: "Сайт",
+        row: 0,
+        buttonType: "url",
+        url: "https://example.com",
+      }),
+      expect.objectContaining({
+        id: "106",
+        label: "Ответ",
+        buttonType: "postback",
+      }),
+    ])
+    expect(decodeButtonPayload(sent.quickReplies[0].postback)).toEqual(
+      expect.objectContaining({
+        flowId: "101",
+        flowVersionId: "102",
+        buttonId: "103",
+        contactInboxId: "104",
+      }),
     )
   })
 

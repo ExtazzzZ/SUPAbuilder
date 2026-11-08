@@ -1043,6 +1043,9 @@ export function emitHumanMessageSentEvents(input: {
 }
 
 export async function sendFlowStepToChannel({
+  operationId,
+  crmNavigation,
+  crmFulfillmentOrigin,
   conversation,
   contactInbox,
   flowId,
@@ -1060,6 +1063,12 @@ export async function sendFlowStepToChannel({
   humanSender,
   isTemplateMessage = false,
 }: {
+  crmFulfillmentOrigin?: import("@chatbotx.io/business").CrmFulfillmentOrigin
+  operationId?: string
+  crmNavigation?: {
+    sourceEventId: string
+    updateMode?: "send_new" | "edit_previous"
+  }
   conversation: ConversationModel
   contactInbox: ContactInboxModel
   flowId: string
@@ -1124,6 +1133,9 @@ export async function sendFlowStepToChannel({
           ...contactInbox,
           sourceConversationId: resolveChannelConversationId(conversation),
         },
+        operationId,
+        crmNavigation,
+        crmFulfillmentOrigin,
         flowId,
         flowVersionId,
         step: resolvedStep,

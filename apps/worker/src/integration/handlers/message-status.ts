@@ -1,4 +1,8 @@
-import { buildContext, conversationService } from "@chatbotx.io/business"
+import {
+  buildContext,
+  conversationService,
+  messageService,
+} from "@chatbotx.io/business"
 import type { IntegrationType } from "@chatbotx.io/database/partials"
 import {
   contactInboxRepository,
@@ -19,7 +23,7 @@ import {
   IntegrationJobAction,
   type IntegrationJobMessageStatus,
 } from "@chatbotx.io/worker-config"
-import type { Job } from "bullmq"
+import { type Job, UnrecoverableError } from "bullmq"
 import { logger } from "../../lib/logger"
 import {
   allIntegrations,
@@ -72,6 +76,22 @@ export const handleMessageStatus = async (
       integrationIdentifier,
     )
   const { inbox, integrationRow } = dbIntegration
+  if (integrationType === "api") {
+    const auth = integrationRow as {
+      enabled?: boolean
+      inboxId?: string
+      workspaceId?: string
+    }
+    if (
+      auth.enabled !== true ||
+      auth.inboxId !== inbox.id ||
+      auth.workspaceId !== inbox.workspaceId ||
+      inbox.id !== integrationIdentifier ||
+      inbox.channel !== "api"
+    ) {
+      throw new UnrecoverableError("api_status_auth_mismatch")
+    }
+  }
   const integration = allIntegrations[integrationType]
   if (!integration) {
     throw new SdkException(
@@ -103,27 +123,52 @@ export const handleMessageStatus = async (
   const eventStatus = String(payload.status).toLowerCase()
 
   try {
-    const contactInbox = await resolveStatusContactInbox(
-      inbox.id,
-      contact.sourceId,
-    )
+    const apiTimestamp =
+      integrationType === "api"
+        ? (normalizeEpochTimestamp(payload.timestamp) ??
+          (typeof payload.timestamp === "string"
+            ? new Date(payload.timestamp)
+            : null))
+        : null
+    if (
+      integrationType === "api" &&
+      (!apiTimestamp || Number.isNaN(apiTimestamp.getTime()))
+    ) {
+      throw new UnrecoverableError("api_status_timestamp_invalid")
+    }
+    const apiOwner =
+      integrationType === "api"
+        ? await messageService.resolveApiStatusOwner({
+            workspaceId: inbox.workspaceId,
+            inboxId: inbox.id,
+            sourceId: payload.messageId,
+          })
+        : null
+    const contactInbox =
+      apiOwner?.contactInbox ??
+      (await resolveStatusContactInbox(inbox.id, contact.sourceId))
 
     if (!contactInbox?.conversation) {
       throw new SdkException("Unable to find conversation")
     }
 
-    const messageRepository = await createMessageRepository()
-    const message = await messageRepository.findBySourceId(
-      payload.messageId,
-      contactInbox.conversation.id,
-      inbox.workspaceId,
-      getSafeSinceTime(contactInbox.lastMessageAt, 365 * 24 * 60 * 60 * 1000),
-    )
+    const message = apiOwner
+      ? apiOwner.message
+      : await (await createMessageRepository()).findBySourceId(
+          payload.messageId,
+          contactInbox.conversation.id,
+          inbox.workspaceId,
+          getSafeSinceTime(
+            contactInbox.lastMessageAt,
+            365 * 24 * 60 * 60 * 1000,
+          ),
+        )
 
     const seenAt =
-      eventStatus === "read"
+      apiTimestamp ??
+      (eventStatus === "read"
         ? (normalizeEpochTimestamp(payload.timestamp) ?? new Date())
-        : new Date()
+        : new Date())
 
     const eventLog = {
       context: {
@@ -157,7 +202,9 @@ export const handleMessageStatus = async (
       await emit(messageEventTypeSchema.enum["message:delivered"], {
         ...eventLog,
         providerOccurredAt:
-          normalizeEpochTimestamp(payload.timestamp) ?? undefined,
+          apiTimestamp ??
+          normalizeEpochTimestamp(payload.timestamp) ??
+          undefined,
       })
 
       emit(messageEventTypeSchema.enum["message:received"], {
@@ -236,6 +283,17 @@ export const handleMessageStatus = async (
       { flowExecutionKey: parentJob?.id },
     )
   } catch (error) {
+    if (
+      integrationType === "api" &&
+      error instanceof Error &&
+      [
+        "api_status_owner_ambiguous",
+        "api_status_owner_mismatch",
+        "api_status_owner_limit",
+      ].includes(error.message)
+    ) {
+      throw new UnrecoverableError(error.message)
+    }
     logger.error(
       error,
       `Error handling message status for messageId: ${payload.messageId}`,
