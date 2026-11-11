@@ -297,6 +297,7 @@ export type IntegrationJobRunFlowNode = {
     }
     crmNavigation?: {
       sourceEventId: string
+      traceId?: string
       updateMode?: "send_new" | "edit_previous"
     }
     /** Immutable inbound source identity, forwarded across every continuation. */
@@ -384,6 +385,7 @@ export type IntegrationJobSendFlowPostback = {
     }
     crmNavigation?: {
       sourceEventId: string
+      traceId?: string
       updateMode?: "send_new" | "edit_previous"
     }
     ref?: string | null
@@ -410,6 +412,7 @@ export type IntegrationJobSendFlowQuickReply = {
     }
     crmNavigation?: {
       sourceEventId: string
+      traceId?: string
       updateMode?: "send_new" | "edit_previous"
     }
     ref?: string | null

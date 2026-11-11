@@ -99,3 +99,21 @@ test("execution status anchor comes only from matching server continuation, neve
     )
   }
 })
+
+test("сквозной traceId сохраняется без изменения исходного события и postback", async () => {
+  const traceId = "123e4567-e89b-42d3-a456-426614174000"
+  const result = await receiveMessage({
+    data: {
+      integrationType: "api",
+      integrationIdentifier: "1",
+      payload: {
+        traceId,
+        contact: { sourceId: "supacrm:registry:42" },
+        message: { sourceId: "event-42", text: "/menu" },
+        postbackPayload: "opaque",
+      },
+    },
+  })
+  expect(result.crmNavigation).toEqual({ sourceEventId: "event-42", traceId })
+  expect(result.postbackAction).toBe("opaque")
+})

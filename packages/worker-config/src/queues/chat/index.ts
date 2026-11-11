@@ -77,6 +77,7 @@ export type ChatJobSendFlowStep = {
     operationId?: string
     crmNavigation?: {
       sourceEventId: string
+      traceId?: string
       updateMode?: "send_new" | "edit_previous"
     }
     conversationId: string

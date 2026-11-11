@@ -1067,6 +1067,7 @@ export async function sendFlowStepToChannel({
   operationId?: string
   crmNavigation?: {
     sourceEventId: string
+    traceId?: string
     updateMode?: "send_new" | "edit_previous"
   }
   conversation: ConversationModel

@@ -89,6 +89,7 @@ export type ChannelSendFlowStepProps<IAuth extends AuthValue> = {
     }
     crmNavigation?: {
       sourceEventId: string
+      traceId?: string
       updateMode?: "send_new" | "edit_previous"
     }
     flowId: string
@@ -162,6 +163,7 @@ export type MessageHandlers<
         }
         crmNavigation?: {
           sourceEventId: string
+          traceId?: string
           updateMode?: "send_new" | "edit_previous"
         }
         flowId: string

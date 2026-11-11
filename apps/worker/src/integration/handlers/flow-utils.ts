@@ -42,6 +42,7 @@ export type ExecuteMultipleStepsProps = {
   trackingContext?: BotResponseTrackingContext
   crmNavigation?: {
     sourceEventId: string
+    traceId?: string
     updateMode?: "send_new" | "edit_previous"
   }
   metadata?: MetadataPayload

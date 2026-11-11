@@ -107,6 +107,7 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
       signingSecret: ctx.auth.signingSecret,
       envelope: {
         operationId,
+        ...(crmNavigation?.traceId ? { traceId: crmNavigation.traceId } : {}),
         event: "message_created",
         timestamp: new Date().toISOString(),
         contact: { id: contact.id, sourceId: contact.sourceId },

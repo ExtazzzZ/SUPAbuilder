@@ -16,6 +16,7 @@ import { z } from "zod"
  * builder's own request validation.
  */
 export const incomingApiMessageSchema = z.object({
+  traceId: z.uuid().optional(),
   crmFulfillmentContinuation: z
     .strictObject({
       fulfillmentRef: z.uuid(),
@@ -196,7 +197,10 @@ export const receiveMessage = ({
       ? validated.crmFulfillmentContinuation
       : undefined,
     crmNavigation: contact.sourceId.startsWith("supacrm:")
-      ? { sourceEventId: validated.message.sourceId }
+      ? {
+          sourceEventId: validated.message.sourceId,
+          ...(validated.traceId ? { traceId: validated.traceId } : {}),
+        }
       : undefined,
     postbackAction: validated.postbackPayload ?? null,
     quickReplyAction: null,

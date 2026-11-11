@@ -302,6 +302,7 @@ export const receiveMessage = async (
   }
   crmNavigation?: {
     sourceEventId: string
+    traceId?: string
     updateMode?: "send_new" | "edit_previous"
   }
   message: MessageWithAttachments | null

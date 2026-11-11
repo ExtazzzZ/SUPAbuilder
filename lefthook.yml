@@ -5,7 +5,7 @@ post-checkout:
 
 pre-commit:
   jobs:
-    - run: pnpm ultracite fix
+    - run: pnpm ultracite fix {staged_files}
       glob: "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}"
       stage_fixed: true
     - name: typecheck

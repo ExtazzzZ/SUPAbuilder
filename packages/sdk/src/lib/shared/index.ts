@@ -49,6 +49,7 @@ export type ReceivedMessageResult = {
   }
   crmNavigation?: {
     sourceEventId: string
+    traceId?: string
     updateMode?: "send_new" | "edit_previous"
   }
   message: IncomingMessage | null

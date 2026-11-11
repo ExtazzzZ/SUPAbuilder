@@ -72,6 +72,9 @@ export async function executeTracedFlowStep<T>(
           retry: 0,
           envelope: {
             event: "execution.trace",
+            ...(props.crmNavigation?.traceId
+              ? { traceId: props.crmNavigation.traceId }
+              : {}),
             operationId,
             contact: { sourceId: props.contactInbox.sourceId },
             trace: {

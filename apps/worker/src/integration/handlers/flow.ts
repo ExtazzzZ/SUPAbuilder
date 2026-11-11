@@ -161,6 +161,7 @@ type ExecuteStepsAndQuickRepliesProps = {
   trackingContext?: BotResponseTrackingContext
   crmNavigation?: {
     sourceEventId: string
+    traceId?: string
     updateMode?: "send_new" | "edit_previous"
   }
   metadata?: MetadataPayload
@@ -1075,25 +1076,36 @@ async function runFlowAction(
 
   // Rich-button fallback тоже может выполнить effect до разрешения версии.
   const owningBinding = await supacrmSourceBindingService.getDocumentBinding({
-    workspaceId: conversation.workspaceId, flowId: parsedAction.flowId,
+    workspaceId: conversation.workspaceId,
+    flowId: parsedAction.flowId,
   })
-  if (owningBinding.kind !== "legacy") return
+  if (owningBinding.kind !== "legacy") {
+    return
+  }
 
   if (parsedAction.entry) {
-    if (contactInbox.channel !== "api") throw new SdkException("Named entry requires API channel")
+    if (contactInbox.channel !== "api") {
+      throw new SdkException("Named entry requires API channel")
+    }
     const { flowVersion } = await detectFlowVersion({
       flowId: parsedAction.flowId,
       workspaceId: conversation.workspaceId,
     })
-    const nodeId = resolveNamedEntry(flowVersion.nodes as unknown as FlowNode[], parsedAction.entry)
-    await runFlowNode({
-      conversationId: data.conversationId,
-      contactInboxId: data.contactInboxId,
-      flowId: parsedAction.flowId,
-      flowVersionId: flowVersion.id,
-      nodeId,
-      crmNavigation: data.crmNavigation,
-    }, { flowExecutionKey })
+    const nodeId = resolveNamedEntry(
+      flowVersion.nodes as unknown as FlowNode[],
+      parsedAction.entry,
+    )
+    await runFlowNode(
+      {
+        conversationId: data.conversationId,
+        contactInboxId: data.contactInboxId,
+        flowId: parsedAction.flowId,
+        flowVersionId: flowVersion.id,
+        nodeId,
+        crmNavigation: data.crmNavigation,
+      },
+      { flowExecutionKey },
+    )
     return
   }
 

@@ -53,3 +53,14 @@ test("message delivery keeps its original timeout and retry defaults", async () 
   expect(post.mock.calls[0][1].timeout).toBe(30_000)
   expect(post.mock.calls[0][1]).not.toHaveProperty("retry")
 })
+
+test("заголовок трассы совпадает с полем подписанного callback", async () => {
+  const traceId = "123e4567-e89b-42d3-a456-426614174000"
+  await postSignedEnvelope({
+    callbackUrl: "https://example.com/cb",
+    signingSecret: "secret",
+    envelope: { traceId },
+  })
+  expect(post.mock.calls[0][1].headers["X-Trace-Id"]).toBe(traceId)
+  expect(JSON.parse(post.mock.calls[0][1].body).traceId).toBe(traceId)
+})

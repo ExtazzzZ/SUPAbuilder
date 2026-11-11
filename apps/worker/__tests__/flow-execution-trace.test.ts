@@ -185,3 +185,13 @@ test("incomplete authored graph still reports a nonempty target identity", async
   )
   expect(post.mock.calls[0][0].envelope.trace.nodeId).toBe("button")
 })
+
+test("трасса блока возвращает исходный traceId", async () => {
+  const traceId = "123e4567-e89b-42d3-a456-426614174000"
+  await executeTracedFlowStep(
+    { ...props, crmNavigation: { sourceEventId: "event", traceId } } as never,
+    step,
+    async () => ({ status: "success" }),
+  )
+  expect(post.mock.calls[0][0].envelope.traceId).toBe(traceId)
+})
