@@ -8,6 +8,18 @@ const editionRule = z
 export const env = createEnv({
   server: {
     NEXT_PUBLIC_EDITION: editionRule,
+    DELIVERY_LATENCY_PROBE: z
+      .stringbool()
+      .default(false)
+      .refine(
+        (enabled) =>
+          !enabled ||
+          (process.env.RAILWAY_PROJECT_ID ===
+            "9ce1c13f-74dc-433b-8c7e-d56aedd58e6a" &&
+            process.env.RAILWAY_ENVIRONMENT_ID ===
+              "3e8b511b-4fc0-4e49-9190-c98b0da86a12"),
+        "Latency probe is permitted only in the test project/environment",
+      ),
     QUOTA_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(10).default(60),
     // Optional upper bound for draining every worker in the process on SIGTERM
     // (lib/shutdown). Consolidated Docker modes default below the 10s stop

@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto"
 import type { BaseStepSchema, FlowNode } from "@chatbotx.io/flow-config"
-import { postSignedEnvelope } from "@chatbotx.io/integration-api/lib/delivery"
+import {
+  latencyProbeAllowed,
+  latencyProbeBuild,
+  postSignedEnvelope,
+  takeLatencyBudget,
+} from "@chatbotx.io/integration-api/lib/delivery"
 import { apiAuthSchema } from "@chatbotx.io/integration-api/schema"
 import { logger } from "../../lib/logger"
 import { resolveIntegrationContextFromContactInbox } from "../../services/integrations"
@@ -30,6 +35,18 @@ export async function executeTracedFlowStep<T>(
       0,
       Math.round((performance.now() - start) * 1000) / 1000,
     )
+    const probeSelected =
+      process.env.DELIVERY_LATENCY_PROBE === "true" &&
+      latencyProbeAllowed({
+        traceId: props.crmNavigation?.traceId,
+        contact: { sourceId: props.contactInbox.sourceId },
+      })
+    const waitStarted = probeSelected ? performance.now() : 0
+    const waitAt = probeSelected ? new Date().toISOString() : ""
+    const probeContext = probeSelected
+      ? { requestId: crypto.randomUUID() }
+      : undefined
+    let probeOutcome = "ok"
     try {
       const { ctx } = await resolveIntegrationContextFromContactInbox({
         workspaceId: props.conversation.workspaceId,
@@ -68,6 +85,7 @@ export async function executeTracedFlowStep<T>(
           callbackUrl: auth.callbackUrl,
           signingSecret: auth.signingSecret,
           // Keep inline diagnostics bounded; never retry or delay routing for seconds.
+          ...(probeContext ? { probeContext } : {}),
           timeoutMs: 500,
           retry: 0,
           envelope: {
@@ -91,11 +109,42 @@ export async function executeTracedFlowStep<T>(
         })
       }
     } catch {
+      probeOutcome = "error"
       // Transport errors may include credentials, URLs or response bodies.
       logger.warn(
         { reason: "execution_trace_delivery_failed" },
         "Flow execution trace delivery failed",
       )
+    } finally {
+      if (
+        probeSelected &&
+        takeLatencyBudget(props.crmNavigation?.traceId ?? "", 1)
+      ) {
+        try {
+          logger.info(
+            {
+              event: "delivery_latency_probe",
+              at: waitAt,
+              request_id: probeContext?.requestId,
+              event_kind: "execution.trace",
+              build: latencyProbeBuild(),
+              trace_id: props.crmNavigation?.traceId,
+              spans: [
+                {
+                  name: "callback.finally",
+                  at: waitAt,
+                  duration_ms: performance.now() - waitStarted,
+                  outcome: probeOutcome,
+                },
+              ],
+              dropped: 0,
+            },
+            "Callback wait timing",
+          )
+        } catch {
+          /* Preserve the step result if logging fails. */
+        }
+      }
     }
   }
 }
